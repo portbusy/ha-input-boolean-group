@@ -1,0 +1,20 @@
+turn_on:
+  name: Turn on
+  description: Turn on all input_boolean entities in the group.
+  target:
+    entity:
+      integration: input_boolean_group
+
+turn_off:
+  name: Turn off
+  description: Turn off all input_boolean entities in the group.
+  target:
+    entity:
+      integration: input_boolean_group
+
+toggle:
+  name: Toggle
+  description: Toggle all input_boolean entities in the group.
+  target:
+    entity:
+      integration: input_boolean_group

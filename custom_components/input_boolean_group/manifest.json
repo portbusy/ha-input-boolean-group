@@ -1,0 +1,14 @@
+{
+  "domain": "input_boolean_group",
+  "name": "Input Boolean Group",
+  "codeowners": [
+    "@portbusy"
+  ],
+  "config_flow": true,
+  "dependencies": [],
+  "documentation": "https://github.com/portbusy/ha-input-boolean-group",
+  "iot_class": "local_push",
+  "issue_tracker": "https://github.com/portbusy/ha-input-boolean-group/issues",
+  "requirements": [],
+  "version": "1.0.0"
+}

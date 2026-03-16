@@ -1,0 +1,43 @@
+{
+  "config": {
+    "step": {
+      "user": {
+        "title": "Create Input Boolean Group",
+        "description": "Group multiple input_boolean entities into a single controllable entity.",
+        "data": {
+          "name": "Name",
+          "icon": "Icon",
+          "entities": "Input boolean entities",
+          "all_mode": "All entities must be on"
+        },
+        "data_description": {
+          "all_mode": "When enabled, the group is only on when ALL members are on. When disabled, the group is on if ANY member is on."
+        }
+      }
+    },
+    "error": {
+      "no_entities": "You must select at least one input_boolean entity."
+    },
+    "abort": {
+      "already_configured": "This group is already configured."
+    }
+  },
+  "options": {
+    "step": {
+      "init": {
+        "title": "Edit Input Boolean Group",
+        "description": "Update the group members and behavior.",
+        "data": {
+          "entities": "Input boolean entities",
+          "all_mode": "All entities must be on"
+        },
+        "data_description": {
+          "all_mode": "When enabled, the group is only on when ALL members are on. When disabled, the group is on if ANY member is on."
+        }
+      }
+    },
+    "error": {
+      "no_entities": "You must select at least one input_boolean entity."
+    }
+  }
+}

@@ -1,0 +1,7 @@
+{
+  "name": "Input Boolean Group",
+  "content_in_root": false,
+  "render_readme": true,
+  "hacs": "2.0.0",
+  "homeassistant": "2024.1.0"
+}
