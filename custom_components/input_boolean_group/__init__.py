@@ -37,7 +37,6 @@ async def async_setup(hass: HomeAssistant, config: ConfigType) -> bool:
     component = EntityComponent[InputBooleanGroup](_LOGGER, DOMAIN, hass)
     hass.data[DOMAIN] = component
 
-    # Register standard switch-like services on the entity
     component.async_register_entity_service(SERVICE_TURN_ON, {}, "async_turn_on")
     component.async_register_entity_service(SERVICE_TURN_OFF, {}, "async_turn_off")
     component.async_register_entity_service(SERVICE_TOGGLE, {}, "async_toggle")
@@ -61,7 +60,6 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     )
 
     await component.async_add_entities([entity])
-
     entry.async_on_unload(entry.add_update_listener(async_reload_entry))
 
     return True
@@ -107,10 +105,6 @@ class InputBooleanGroup(RestoreEntity):
         self._is_on = False
         self._unsub_state_changed: callback | None = None
 
-    # ------------------------------------------------------------------
-    # State
-    # ------------------------------------------------------------------
-
     @property
     def state(self) -> str:
         """Return the group state as on/off."""
@@ -129,23 +123,15 @@ class InputBooleanGroup(RestoreEntity):
             ATTR_ALL_MODE: self._all_mode,
         }
 
-    # ------------------------------------------------------------------
-    # Lifecycle
-    # ------------------------------------------------------------------
-
     async def async_added_to_hass(self) -> None:
         """Subscribe to member state changes when added to hass."""
         await super().async_added_to_hass()
 
-        # Restore previous state on HA restart
         last_state = await self.async_get_last_state()
         if last_state is not None:
             self._is_on = last_state.state == STATE_ON
 
-        # Listen for state changes on all member entities
         self._async_start_tracking()
-
-        # Compute the initial state from current member states
         self._async_update_group_state()
 
     @callback
@@ -175,7 +161,6 @@ class InputBooleanGroup(RestoreEntity):
                 states.append(state.state == STATE_ON)
 
         if not states:
-            # All members are unavailable / unknown → group is off
             self._is_on = False
             return
 
@@ -189,10 +174,6 @@ class InputBooleanGroup(RestoreEntity):
         if self._unsub_state_changed is not None:
             self._unsub_state_changed()
             self._unsub_state_changed = None
-
-    # ------------------------------------------------------------------
-    # Commands
-    # ------------------------------------------------------------------
 
     async def async_turn_on(self, **kwargs: Any) -> None:
         """Turn on all member input_boolean entities."""
