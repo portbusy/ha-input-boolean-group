@@ -2,9 +2,17 @@
 
 [![hacs_badge](https://img.shields.io/badge/HACS-Custom-41BDF5.svg)](https://github.com/hacs/integration)
 
+[![Home Assistant Community Forum](https://img.shields.io/badge/Home%20Assistant-Community%20Forum-blue?logo=home-assistant&style=for-the-badge)](https://community.home-assistant.io/t/input-boolean-groups/996318)
+
 A custom Home Assistant integration that lets you **group `input_boolean` entities** into a single controllable entity — directly from the UI.
 
 Home Assistant's built-in Group helper supports lights, switches, binary sensors, covers, fans, and more — but **not `input_boolean`**. This integration fills that gap.
+
+<br>
+
+[![Open Input Boolean Group on Home Assistant Community Store (HACS).](https://my.home-assistant.io/badges/hacs_repository.svg)](https://my.home-assistant.io/redirect/hacs_repository/?owner=portbusy&repository=ha-input-boolean-group&category=integration)
+
+
 
 ## Features
 
