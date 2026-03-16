@@ -2,6 +2,6 @@
   "name": "Input Boolean Group",
   "content_in_root": false,
   "render_readme": true,
-  "hacs": "2.0.0",
-  "homeassistant": "2024.1.0"
+  "hacs": "2.0.5",
+  "homeassistant": "2026.2.0"
 }
