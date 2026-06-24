@@ -17,6 +17,7 @@ from .const import (
     DOMAIN,
     MODE_ALL,
     MODE_ANY,
+    MODE_CONDITIONS,
     MODE_UNION,
 )
 
@@ -32,6 +33,10 @@ _MODE_OPTIONS = [
     {
         "value": MODE_UNION,
         "label": "Union — specify which entities must be ON and which OFF",
+    },
+    {
+        "value": MODE_CONDITIONS,
+        "label": "Conditions — full OR/AND/NOT logic, like automations",
     },
 ]
 
@@ -64,6 +69,8 @@ class InputBooleanGroupConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
             mode = user_input.get(CONF_MODE, MODE_ANY)
             if mode == MODE_UNION:
                 return await self.async_step_union()
+            if mode == MODE_CONDITIONS:
+                return await self.async_step_conditions()
             return await self.async_step_entities()
 
         schema = vol.Schema(
@@ -135,6 +142,31 @@ class InputBooleanGroupConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
             step_id="union", data_schema=schema, errors=errors
         )
 
+    async def async_step_conditions(
+        self, user_input: dict[str, Any] | None = None
+    ) -> config_entries.ConfigFlowResult:
+        """Step 2 (conditions) – build OR/AND/NOT logic via condition selector."""
+        errors: dict[str, str] = {}
+
+        if user_input is not None:
+            if not user_input.get(CONF_CONDITIONS):
+                errors["base"] = "no_conditions"
+            else:
+                self._data.update(user_input)
+                return self.async_create_entry(
+                    title=self._data["name"], data=self._data
+                )
+
+        schema = vol.Schema(
+            {
+                vol.Required(CONF_CONDITIONS): _condition_selector(),
+            }
+        )
+
+        return self.async_show_form(
+            step_id="conditions", data_schema=schema, errors=errors
+        )
+
     @staticmethod
     @callback
     def async_get_options_flow(
@@ -172,6 +204,8 @@ class InputBooleanGroupOptionsFlowHandler(config_entries.OptionsFlow):
             mode = user_input.get(CONF_MODE, MODE_ANY)
             if mode == MODE_UNION:
                 return await self.async_step_union()
+            if mode == MODE_CONDITIONS:
+                return await self.async_step_conditions()
             return await self.async_step_entities()
 
         schema = vol.Schema(
@@ -245,4 +279,29 @@ class InputBooleanGroupOptionsFlowHandler(config_entries.OptionsFlow):
 
         return self.async_show_form(
             step_id="union", data_schema=schema, errors=errors
+        )
+
+    async def async_step_conditions(
+        self, user_input: dict[str, Any] | None = None
+    ) -> config_entries.ConfigFlowResult:
+        """Step 2 (conditions) – build OR/AND/NOT logic via condition selector."""
+        errors: dict[str, str] = {}
+
+        if user_input is not None:
+            if not user_input.get(CONF_CONDITIONS):
+                errors["base"] = "no_conditions"
+            else:
+                self._options.update(user_input)
+                return self.async_create_entry(title="", data=self._options)
+
+        schema = vol.Schema(
+            {
+                vol.Required(
+                    CONF_CONDITIONS, default=self._get(CONF_CONDITIONS, [])
+                ): _condition_selector(),
+            }
+        )
+
+        return self.async_show_form(
+            step_id="conditions", data_schema=schema, errors=errors
         )

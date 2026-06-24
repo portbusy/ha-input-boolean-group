@@ -16,6 +16,7 @@ CONF_CONDITIONS = "conditions"
 MODE_ANY = "any"
 MODE_ALL = "all"
 MODE_UNION = "union"
+MODE_CONDITIONS = "conditions"
 
 # State attributes
 ATTR_ENTITY_IDS = "entity_id"

@@ -34,12 +34,34 @@ from .const import (
     DOMAIN,
     MODE_ALL,
     MODE_ANY,
+    MODE_CONDITIONS,
     MODE_UNION,
 )
 
 _LOGGER = logging.getLogger(__name__)
 
 CONFIG_SCHEMA = cv.config_entry_only_config_schema(DOMAIN)
+
+
+def _extract_entity_ids_from_conditions(conditions: list[dict]) -> list[str]:
+    """Recursively collect every entity_id referenced inside a condition list."""
+    entity_ids: set[str] = set()
+
+    def _scan(obj: Any) -> None:
+        if isinstance(obj, dict):
+            raw = obj.get("entity_id")
+            if isinstance(raw, str):
+                entity_ids.add(raw)
+            elif isinstance(raw, list):
+                entity_ids.update(e for e in raw if isinstance(e, str))
+            for v in obj.values():
+                _scan(v)
+        elif isinstance(obj, list):
+            for item in obj:
+                _scan(item)
+
+    _scan(conditions)
+    return list(entity_ids)
 
 
 async def async_setup(hass: HomeAssistant, config: ConfigType) -> bool:
@@ -133,6 +155,10 @@ class InputBooleanGroup(RestoreEntity):
     @property
     def _all_tracked_ids(self) -> list[str]:
         """Deduplicated list of all entity IDs to monitor for state changes."""
+        if self._mode == MODE_CONDITIONS:
+            # Entities are embedded inside the condition configs
+            return _extract_entity_ids_from_conditions(self._conditions)
+
         seen: set[str] = set()
         result: list[str] = []
         for eid in self._entity_ids + self._entities_on + self._entities_off:
@@ -161,6 +187,8 @@ class InputBooleanGroup(RestoreEntity):
         if self._mode == MODE_UNION:
             attrs[ATTR_ENTITIES_ON] = self._entities_on
             attrs[ATTR_ENTITIES_OFF] = self._entities_off
+        elif self._mode == MODE_CONDITIONS:
+            attrs[ATTR_ENTITY_IDS] = self._all_tracked_ids
         else:
             attrs[ATTR_ENTITY_IDS] = self._entity_ids
         return attrs
@@ -193,9 +221,13 @@ class InputBooleanGroup(RestoreEntity):
 
     async def _async_update_and_write(self) -> None:
         """Recompute group state, evaluate conditions, then push to HA."""
-        self._async_compute_base_state()
-        if self._is_on and self._conditions:
-            self._is_on = await self._async_check_conditions()
+        if self._mode == MODE_CONDITIONS:
+            # State is determined entirely by conditions
+            self._is_on = await self._async_check_conditions() if self._conditions else False
+        else:
+            self._async_compute_base_state()
+            if self._is_on and self._conditions:
+                self._is_on = await self._async_check_conditions()
         self.async_write_ha_state()
 
     @callback
@@ -270,7 +302,10 @@ class InputBooleanGroup(RestoreEntity):
 
         In union mode: set entities_on → ON, entities_off → OFF.
         In any/all mode: turn on all member entities.
+        In conditions mode: no-op (state is read-only, driven by conditions).
         """
+        if self._mode == MODE_CONDITIONS:
+            return
         if self._mode == MODE_UNION:
             if self._entities_on:
                 await self.hass.services.async_call(
@@ -299,7 +334,10 @@ class InputBooleanGroup(RestoreEntity):
 
         In union mode: invert the union condition (entities_on → OFF, entities_off → ON).
         In any/all mode: turn off all member entities.
+        In conditions mode: no-op (state is read-only, driven by conditions).
         """
+        if self._mode == MODE_CONDITIONS:
+            return
         if self._mode == MODE_UNION:
             if self._entities_on:
                 await self.hass.services.async_call(

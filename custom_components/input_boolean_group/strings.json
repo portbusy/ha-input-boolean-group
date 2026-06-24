@@ -38,11 +38,22 @@
           "entities_off": "The group is ON only if ALL of these entities are OFF.",
           "conditions": "All conditions must also pass (evaluated after entity states)."
         }
+      },
+      "conditions": {
+        "title": "Conditions — Custom Logic",
+        "description": "Define the group state using full OR/AND/NOT logic, exactly like automation conditions. The group is ON when all top-level conditions pass. Use an OR condition wrapping multiple AND conditions to express alternative combinations.",
+        "data": {
+          "conditions": "Conditions"
+        },
+        "data_description": {
+          "conditions": "Supports OR, AND, NOT, state, template, numeric_state and all other HA condition types. Entity IDs referenced in state conditions are tracked automatically."
+        }
       }
     },
     "error": {
       "no_entities": "You must select at least one input_boolean entity.",
-      "no_union_entities": "You must select at least one entity for 'must be ON' or 'must be OFF'."
+      "no_union_entities": "You must select at least one entity for 'must be ON' or 'must be OFF'.",
+      "no_conditions": "You must add at least one condition."
     },
     "abort": {
       "already_configured": "This group is already configured."
@@ -85,11 +96,22 @@
           "entities_off": "The group is ON only if ALL of these entities are OFF.",
           "conditions": "All conditions must also pass (evaluated after entity states)."
         }
+      },
+      "conditions": {
+        "title": "Edit Conditions — Custom Logic",
+        "description": "Update the OR/AND/NOT conditions that determine the group state.",
+        "data": {
+          "conditions": "Conditions"
+        },
+        "data_description": {
+          "conditions": "Use OR, AND, NOT, state, template, numeric_state and all other HA condition types. Entity IDs are detected automatically for state-change tracking."
+        }
       }
     },
     "error": {
       "no_entities": "You must select at least one input_boolean entity.",
-      "no_union_entities": "You must select at least one entity for 'must be ON' or 'must be OFF'."
+      "no_union_entities": "You must select at least one entity for 'must be ON' or 'must be OFF'.",
+      "no_conditions": "You must add at least one condition."
     }
   }
 }
