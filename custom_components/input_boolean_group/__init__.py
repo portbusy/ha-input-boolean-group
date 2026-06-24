@@ -21,10 +21,20 @@ from homeassistant.helpers.typing import ConfigType
 
 from .const import (
     ATTR_ALL_MODE,
+    ATTR_ENTITIES_OFF,
+    ATTR_ENTITIES_ON,
     ATTR_ENTITY_IDS,
+    ATTR_MODE,
     CONF_ALL_MODE,
+    CONF_CONDITIONS,
     CONF_ENTITIES,
+    CONF_ENTITIES_OFF,
+    CONF_ENTITIES_ON,
+    CONF_MODE,
     DOMAIN,
+    MODE_ALL,
+    MODE_ANY,
+    MODE_UNION,
 )
 
 _LOGGER = logging.getLogger(__name__)
@@ -48,15 +58,24 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     """Set up an Input Boolean Group from a config entry."""
     component: EntityComponent[InputBooleanGroup] = hass.data[DOMAIN]
 
-    entities = entry.options.get(CONF_ENTITIES, entry.data.get(CONF_ENTITIES, []))
-    all_mode = entry.options.get(CONF_ALL_MODE, entry.data.get(CONF_ALL_MODE, False))
+    def _get(key: str, default: Any = None) -> Any:
+        return entry.options.get(key, entry.data.get(key, default))
+
+    # Resolve mode, migrating legacy all_mode if needed
+    if CONF_MODE in entry.options or CONF_MODE in entry.data:
+        mode = _get(CONF_MODE, MODE_ANY)
+    else:
+        mode = MODE_ALL if _get(CONF_ALL_MODE, False) else MODE_ANY
 
     entity = InputBooleanGroup(
         unique_id=entry.entry_id,
         name=entry.data["name"],
-        entity_ids=entities,
         icon=entry.data.get("icon"),
-        all_mode=all_mode,
+        mode=mode,
+        entity_ids=_get(CONF_ENTITIES, []),
+        entities_on=_get(CONF_ENTITIES_ON, []),
+        entities_off=_get(CONF_ENTITIES_OFF, []),
+        conditions=_get(CONF_CONDITIONS, []),
     )
 
     await component.async_add_entities([entity])
@@ -92,18 +111,35 @@ class InputBooleanGroup(RestoreEntity):
         self,
         unique_id: str,
         name: str,
-        entity_ids: list[str],
         icon: str | None,
-        all_mode: bool,
+        mode: str,
+        entity_ids: list[str],
+        entities_on: list[str],
+        entities_off: list[str],
+        conditions: list[dict],
     ) -> None:
         """Initialize the group."""
         self._attr_unique_id = unique_id
         self._attr_name = name
         self._attr_icon = icon or "mdi:toggle-switch-outline"
+        self._mode = mode
         self._entity_ids = entity_ids
-        self._all_mode = all_mode
+        self._entities_on = entities_on
+        self._entities_off = entities_off
+        self._conditions = conditions
         self._is_on = False
         self._unsub_state_changed: callback | None = None
+
+    @property
+    def _all_tracked_ids(self) -> list[str]:
+        """Deduplicated list of all entity IDs to monitor for state changes."""
+        seen: set[str] = set()
+        result: list[str] = []
+        for eid in self._entity_ids + self._entities_on + self._entities_off:
+            if eid not in seen:
+                seen.add(eid)
+                result.append(eid)
+        return result
 
     @property
     def state(self) -> str:
@@ -117,11 +153,17 @@ class InputBooleanGroup(RestoreEntity):
 
     @property
     def extra_state_attributes(self) -> dict[str, Any]:
-        """Expose member entity IDs and mode."""
-        return {
-            ATTR_ENTITY_IDS: self._entity_ids,
-            ATTR_ALL_MODE: self._all_mode,
+        """Expose mode-specific member IDs and current mode."""
+        attrs: dict[str, Any] = {
+            ATTR_MODE: self._mode,
+            ATTR_ALL_MODE: self._mode == MODE_ALL,  # backward compat
         }
+        if self._mode == MODE_UNION:
+            attrs[ATTR_ENTITIES_ON] = self._entities_on
+            attrs[ATTR_ENTITIES_OFF] = self._entities_off
+        else:
+            attrs[ATTR_ENTITY_IDS] = self._entity_ids
+        return attrs
 
     async def async_added_to_hass(self) -> None:
         """Subscribe to member state changes when added to hass."""
@@ -132,26 +174,42 @@ class InputBooleanGroup(RestoreEntity):
             self._is_on = last_state.state == STATE_ON
 
         self._async_start_tracking()
-        self._async_update_group_state()
+        await self._async_update_and_write()
 
     @callback
     def _async_start_tracking(self) -> None:
-        """Start tracking state changes for all member entities."""
+        """Start listening to state changes for all tracked member entities."""
+        tracked = self._all_tracked_ids
+        if not tracked:
+            return
 
         @callback
         def _async_state_changed(event: Event) -> None:
-            """Handle a member entity state change."""
-            self._async_update_group_state()
-            self.async_write_ha_state()
+            self.hass.async_create_task(self._async_update_and_write())
 
         self._unsub_state_changed = async_track_state_change_event(
-            self.hass, self._entity_ids, _async_state_changed
+            self.hass, tracked, _async_state_changed
         )
 
+    async def _async_update_and_write(self) -> None:
+        """Recompute group state, evaluate conditions, then push to HA."""
+        self._async_compute_base_state()
+        if self._is_on and self._conditions:
+            self._is_on = await self._async_check_conditions()
+        self.async_write_ha_state()
+
     @callback
-    def _async_update_group_state(self) -> None:
-        """Re-compute the group on/off state from member states."""
-        states = []
+    def _async_compute_base_state(self) -> None:
+        """Compute _is_on from member entity states (sync, no conditions)."""
+        if self._mode == MODE_UNION:
+            self._is_on = self._compute_union_state()
+        else:
+            self._compute_any_all_state()
+
+    @callback
+    def _compute_any_all_state(self) -> None:
+        """Evaluate any/all aggregation over self._entity_ids."""
+        states: list[bool] = []
         for eid in self._entity_ids:
             state = self.hass.states.get(eid)
             if state is not None and state.state not in (
@@ -164,10 +222,42 @@ class InputBooleanGroup(RestoreEntity):
             self._is_on = False
             return
 
-        if self._all_mode:
-            self._is_on = all(states)
-        else:
-            self._is_on = any(states)
+        self._is_on = all(states) if self._mode == MODE_ALL else any(states)
+
+    def _compute_union_state(self) -> bool:
+        """Return True when entities_on are all ON and entities_off are all OFF."""
+        if not self._entities_on and not self._entities_off:
+            return False
+
+        for eid in self._entities_on:
+            state = self.hass.states.get(eid)
+            if state is None or state.state in (STATE_UNAVAILABLE, STATE_UNKNOWN):
+                return False
+            if state.state != STATE_ON:
+                return False
+
+        for eid in self._entities_off:
+            state = self.hass.states.get(eid)
+            if state is None or state.state in (STATE_UNAVAILABLE, STATE_UNKNOWN):
+                return False
+            if state.state == STATE_ON:
+                return False
+
+        return True
+
+    async def _async_check_conditions(self) -> bool:
+        """Evaluate HA automation-style conditions; returns True if all pass."""
+        from homeassistant.helpers import condition as cond_helper  # noqa: PLC0415
+
+        try:
+            for cond_config in self._conditions:
+                check = await cond_helper.async_from_config(self.hass, cond_config)
+                if not check(self.hass, None):
+                    return False
+            return True
+        except Exception as err:  # noqa: BLE001
+            _LOGGER.error("Error evaluating conditions for %s: %s", self.name, err)
+            return False
 
     async def async_will_remove_from_hass(self) -> None:
         """Clean up state tracking on removal."""
@@ -176,28 +266,66 @@ class InputBooleanGroup(RestoreEntity):
             self._unsub_state_changed = None
 
     async def async_turn_on(self, **kwargs: Any) -> None:
-        """Turn on all member input_boolean entities."""
-        await self.hass.services.async_call(
-            "input_boolean",
-            SERVICE_TURN_ON,
-            {ATTR_ENTITY_ID: self._entity_ids},
-            blocking=True,
-        )
+        """Turn on the group.
+
+        In union mode: set entities_on → ON, entities_off → OFF.
+        In any/all mode: turn on all member entities.
+        """
+        if self._mode == MODE_UNION:
+            if self._entities_on:
+                await self.hass.services.async_call(
+                    "input_boolean",
+                    SERVICE_TURN_ON,
+                    {ATTR_ENTITY_ID: self._entities_on},
+                    blocking=True,
+                )
+            if self._entities_off:
+                await self.hass.services.async_call(
+                    "input_boolean",
+                    SERVICE_TURN_OFF,
+                    {ATTR_ENTITY_ID: self._entities_off},
+                    blocking=True,
+                )
+        else:
+            await self.hass.services.async_call(
+                "input_boolean",
+                SERVICE_TURN_ON,
+                {ATTR_ENTITY_ID: self._entity_ids},
+                blocking=True,
+            )
 
     async def async_turn_off(self, **kwargs: Any) -> None:
-        """Turn off all member input_boolean entities."""
-        await self.hass.services.async_call(
-            "input_boolean",
-            SERVICE_TURN_OFF,
-            {ATTR_ENTITY_ID: self._entity_ids},
-            blocking=True,
-        )
+        """Turn off the group.
+
+        In union mode: invert the union condition (entities_on → OFF, entities_off → ON).
+        In any/all mode: turn off all member entities.
+        """
+        if self._mode == MODE_UNION:
+            if self._entities_on:
+                await self.hass.services.async_call(
+                    "input_boolean",
+                    SERVICE_TURN_OFF,
+                    {ATTR_ENTITY_ID: self._entities_on},
+                    blocking=True,
+                )
+            if self._entities_off:
+                await self.hass.services.async_call(
+                    "input_boolean",
+                    SERVICE_TURN_ON,
+                    {ATTR_ENTITY_ID: self._entities_off},
+                    blocking=True,
+                )
+        else:
+            await self.hass.services.async_call(
+                "input_boolean",
+                SERVICE_TURN_OFF,
+                {ATTR_ENTITY_ID: self._entity_ids},
+                blocking=True,
+            )
 
     async def async_toggle(self, **kwargs: Any) -> None:
-        """Toggle all member input_boolean entities."""
-        await self.hass.services.async_call(
-            "input_boolean",
-            SERVICE_TOGGLE,
-            {ATTR_ENTITY_ID: self._entity_ids},
-            blocking=True,
-        )
+        """Toggle the group state."""
+        if self._is_on:
+            await self.async_turn_off()
+        else:
+            await self.async_turn_on()
