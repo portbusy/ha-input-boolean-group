@@ -21,6 +21,8 @@ from .const import (
     MODE_UNION,
 )
 
+_STEP1_KEYS = frozenset({"name", "icon", CONF_MODE})
+
 _MODE_OPTIONS = [
     {
         "value": MODE_ANY,
@@ -41,9 +43,9 @@ _MODE_OPTIONS = [
 ]
 
 
-def _entity_selector(multiple: bool = True) -> selector.EntitySelector:
+def _entity_selector() -> selector.EntitySelector:
     return selector.EntitySelector(
-        selector.EntitySelectorConfig(domain="input_boolean", multiple=multiple)
+        selector.EntitySelectorConfig(domain="input_boolean", multiple=True)
     )
 
 
@@ -64,7 +66,11 @@ class InputBooleanGroupConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
         self, user_input: dict[str, Any] | None = None
     ) -> config_entries.ConfigFlowResult:
         """Step 1 – name, icon and mode selection."""
+        errors: dict[str, str] = {}
+
         if user_input is not None:
+            # Keep only step-1 keys so stale step-2 keys don't leak into the entry.
+            self._data = {k: v for k, v in self._data.items() if k in _STEP1_KEYS}
             self._data.update(user_input)
             mode = user_input.get(CONF_MODE, MODE_ANY)
             if mode == MODE_UNION:
@@ -85,7 +91,7 @@ class InputBooleanGroupConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
             }
         )
 
-        return self.async_show_form(step_id="user", data_schema=schema)
+        return self.async_show_form(step_id="user", data_schema=schema, errors=errors)
 
     async def async_step_entities(
         self, user_input: dict[str, Any] | None = None
@@ -159,7 +165,7 @@ class InputBooleanGroupConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
 
         schema = vol.Schema(
             {
-                vol.Required(CONF_CONDITIONS): _condition_selector(),
+                vol.Required(CONF_CONDITIONS, default=[]): _condition_selector(),
             }
         )
 
@@ -199,7 +205,11 @@ class InputBooleanGroupOptionsFlowHandler(config_entries.OptionsFlow):
         self, user_input: dict[str, Any] | None = None
     ) -> config_entries.ConfigFlowResult:
         """Step 1 – mode selection."""
+        errors: dict[str, str] = {}
+
         if user_input is not None:
+            # Keep only the mode key so stale step-2 keys don't leak into options.
+            self._options = {k: v for k, v in self._options.items() if k == CONF_MODE}
             self._options.update(user_input)
             mode = user_input.get(CONF_MODE, MODE_ANY)
             if mode == MODE_UNION:
@@ -218,7 +228,7 @@ class InputBooleanGroupOptionsFlowHandler(config_entries.OptionsFlow):
             }
         )
 
-        return self.async_show_form(step_id="init", data_schema=schema)
+        return self.async_show_form(step_id="init", data_schema=schema, errors=errors)
 
     async def async_step_entities(
         self, user_input: dict[str, Any] | None = None
