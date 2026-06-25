@@ -1,6 +1,7 @@
 """Core logic and entity setup for the Input Boolean Group helper."""
 import asyncio
 import logging
+import re
 from typing import Any
 
 from homeassistant.config_entries import ConfigEntry
@@ -13,6 +14,7 @@ from homeassistant.const import (
     STATE_UNAVAILABLE,
     STATE_UNKNOWN,
 )
+from homeassistant.const import EVENT_HOMEASSISTANT_STARTED
 from homeassistant.core import Event, HomeAssistant, callback
 from homeassistant.helpers import condition as cond_helper
 from homeassistant.helpers import config_validation as cv
@@ -47,11 +49,19 @@ CONFIG_SCHEMA = cv.config_entry_only_config_schema(DOMAIN)
 
 _UNAVAILABLE_STATES = frozenset({STATE_UNAVAILABLE, STATE_UNKNOWN})
 
+# Matches states("entity.id"), is_state("entity.id", ...), state_attr("entity.id", ...)
+_TEMPLATE_ENTITY_RE = re.compile(
+    r'(?:states|is_state|state_attr)\s*\(\s*["\']([a-z_]+\.[a-z0-9_]+)["\']'
+)
+
+
 def _extract_entity_ids_from_conditions(conditions: list[dict]) -> list[str]:
     """Recursively collect entity IDs referenced inside a condition list.
 
-    Scans both 'entity_id' (singular) and 'entity_ids' (plural) since
-    different HA condition types use either form.
+    Scans both 'entity_id' (singular) and 'entity_ids' (plural) for explicit
+    references, and also extracts entities from value_template strings via
+    regex so that template-based conditions trigger re-evaluation when any
+    referenced entity changes.
     """
     entity_ids: set[str] = set()
 
@@ -63,6 +73,11 @@ def _extract_entity_ids_from_conditions(conditions: list[dict]) -> list[str]:
                     entity_ids.add(raw)
                 elif isinstance(raw, list):
                     entity_ids.update(e for e in raw if isinstance(e, str))
+            # Extract entities referenced inside template strings.
+            for key in ("value_template", "template"):
+                tmpl = obj.get(key)
+                if isinstance(tmpl, str):
+                    entity_ids.update(_TEMPLATE_ENTITY_RE.findall(tmpl))
             for v in obj.values():
                 _scan(v)
         elif isinstance(obj, list):
@@ -250,6 +265,17 @@ class InputBooleanGroup(RestoreEntity):
 
         self._async_start_tracking()
         await self._async_update_and_write()
+
+        if self._mode == MODE_CONDITIONS:
+            # Re-evaluate once HA has fully started: template-referenced entities
+            # (e.g. sensors) may not have their state yet during early setup.
+            @callback
+            def _on_ha_started(_event: Event) -> None:
+                self.hass.async_create_task(self._async_update_and_write())
+
+            self.async_on_remove(
+                self.hass.bus.async_listen_once(EVENT_HOMEASSISTANT_STARTED, _on_ha_started)
+            )
 
     @callback
     def _async_start_tracking(self) -> None:
