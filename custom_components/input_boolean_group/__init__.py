@@ -138,10 +138,9 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     # Without this, the Helpers UI cannot find the options flow for editing
     # and the integration page shows no entity count.
     ent_reg = er.async_get(hass)
-    entity_id = ent_reg.async_get_entity_id(DOMAIN, DOMAIN, entry.entry_id)
-    if entity_id and (ent_entry := ent_reg.async_get(entity_id)):
+    if entity.entity_id and (ent_entry := ent_reg.async_get(entity.entity_id)):
         if ent_entry.config_entry_id != entry.entry_id:
-            ent_reg.async_update_entity(entity_id, config_entry_id=entry.entry_id)
+            ent_reg.async_update_entity(entity.entity_id, config_entry_id=entry.entry_id)
 
     entry.async_on_unload(entry.add_update_listener(async_reload_entry))
 
