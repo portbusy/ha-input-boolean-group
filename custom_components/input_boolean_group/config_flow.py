@@ -7,6 +7,7 @@ from homeassistant import config_entries
 from homeassistant.core import callback
 from homeassistant.helpers import selector
 
+from . import _normalize_conditions
 from .const import (
     CONF_ALL_MODE,
     CONF_CONDITIONS,
@@ -22,52 +23,6 @@ from .const import (
 )
 
 _STEP1_KEYS = frozenset({"name", "icon", CONF_MODE})
-
-
-def _normalize_conditions(conditions: list[dict]) -> list[dict]:
-    """Normalize conditions to HA-backend-compatible form.
-
-    The HA frontend condition editor generates data that sometimes doesn't
-    match the backend ConditionSelector schema:
-    - state: entity_id as single-item list → string; match:all removed
-    - state: state as single-item list → string
-    - or/and: spurious `mode` key removed (not in backend schema)
-    - template: value_template as {template: "..."} dict → plain string
-
-    Recurses into nested condition lists.
-    """
-    result: list[dict] = []
-    for raw in conditions:
-        cond: dict[str, Any] = dict(raw)
-        cond_type = cond.get("condition")
-
-        if cond_type == "state":
-            entity_id = cond.get("entity_id")
-            if isinstance(entity_id, list) and len(entity_id) == 1:
-                cond["entity_id"] = entity_id[0]
-                cond.pop("match", None)
-            state = cond.get("state")
-            if isinstance(state, list) and len(state) == 1:
-                cond["state"] = state[0]
-
-        elif cond_type in ("or", "and", "not"):
-            # Frontend sometimes emits mode:or/and redundantly; backend rejects it.
-            cond.pop("mode", None)
-
-        elif cond_type == "template":
-            # Frontend stores value_template as {template: "..."} dict; backend
-            # requires a plain string.
-            vt = cond.get("value_template")
-            if isinstance(vt, dict) and "template" in vt:
-                cond["value_template"] = vt["template"]
-
-        for nested_key in ("conditions", "sequence"):
-            nested = cond.get(nested_key)
-            if isinstance(nested, list):
-                cond[nested_key] = _normalize_conditions(nested)
-
-        result.append(cond)
-    return result
 
 
 class _ConditionSelector(selector.ConditionSelector):

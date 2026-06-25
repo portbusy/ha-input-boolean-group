@@ -7,6 +7,7 @@ from typing import Any
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.const import (
     ATTR_ENTITY_ID,
+    EVENT_HOMEASSISTANT_STARTED,
     SERVICE_TURN_OFF,
     SERVICE_TURN_ON,
     STATE_OFF,
@@ -14,7 +15,6 @@ from homeassistant.const import (
     STATE_UNAVAILABLE,
     STATE_UNKNOWN,
 )
-from homeassistant.const import EVENT_HOMEASSISTANT_STARTED
 from homeassistant.core import Event, HomeAssistant, callback
 from homeassistant.helpers import condition as cond_helper
 from homeassistant.helpers import config_validation as cv
@@ -48,6 +48,46 @@ _LOGGER = logging.getLogger(__name__)
 CONFIG_SCHEMA = cv.config_entry_only_config_schema(DOMAIN)
 
 _UNAVAILABLE_STATES = frozenset({STATE_UNAVAILABLE, STATE_UNKNOWN})
+
+
+def _normalize_conditions(conditions: list[dict]) -> list[dict]:
+    """Normalize raw condition dicts to forms accepted by async_from_config.
+
+    The HA frontend condition editor sometimes generates data that its own
+    backend schema rejects:
+    - state: entity_id as single-item list → string; redundant match:all removed
+    - state: state as single-item list → string
+    - or/and/not: spurious `mode` key removed
+    - template: value_template as {template: "..."} dict → plain string
+
+    Called both from config_flow (before saving) and from async_setup_entry
+    (at load time, to fix entries saved before normalization was in place).
+    """
+    result: list[dict] = []
+    for raw in conditions:
+        cond: dict[str, Any] = dict(raw)
+        cond_type = cond.get("condition")
+        if cond_type == "state":
+            entity_id = cond.get("entity_id")
+            if isinstance(entity_id, list) and len(entity_id) == 1:
+                cond["entity_id"] = entity_id[0]
+                cond.pop("match", None)
+            state = cond.get("state")
+            if isinstance(state, list) and len(state) == 1:
+                cond["state"] = state[0]
+        elif cond_type in ("or", "and", "not"):
+            cond.pop("mode", None)
+        elif cond_type == "template":
+            vt = cond.get("value_template")
+            if isinstance(vt, dict) and "template" in vt:
+                cond["value_template"] = vt["template"]
+        for nested_key in ("conditions", "sequence"):
+            nested = cond.get(nested_key)
+            if isinstance(nested, list):
+                cond[nested_key] = _normalize_conditions(nested)
+        result.append(cond)
+    return result
+
 
 # Matches states("entity.id"), is_state("entity.id", ...), state_attr("entity.id", ...)
 _TEMPLATE_ENTITY_RE = re.compile(
@@ -141,7 +181,7 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
         entity_ids=_get(CONF_ENTITIES, []),
         entities_on=_get(CONF_ENTITIES_ON, []),
         entities_off=_get(CONF_ENTITIES_OFF, []),
-        conditions=_get(CONF_CONDITIONS, []),
+        conditions=_normalize_conditions(_get(CONF_CONDITIONS, [])),
     )
 
     await component.async_add_entities([entity])
