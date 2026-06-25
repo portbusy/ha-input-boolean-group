@@ -71,18 +71,18 @@ def _normalize_conditions(conditions: list[dict]) -> list[dict]:
 
 
 class _ConditionSelector(selector.ConditionSelector):
-    """ConditionSelector that normalizes frontend-generated conditions before
-    the backend schema validation runs.
+    """ConditionSelector that normalizes and accepts any condition list.
 
-    HA's frontend condition editor produces data (mode key in or/and, dict
-    value_template) that ConditionSelector's own schema rejects. Subclassing
-    lets us fix the data in place while keeping the condition-editor UI widget.
+    HA's frontend editor produces data that its own backend schema rejects
+    (mode key in or/and, dict value_template, single-entity-list entity_id).
+    We normalize the data and skip the parent schema validation entirely —
+    async_from_config validates at runtime when the entry is loaded.
     """
 
     def __call__(self, data: Any) -> Any:
-        if isinstance(data, list):
-            data = _normalize_conditions(data)
-        return super().__call__(data)
+        if not isinstance(data, list):
+            raise vol.Invalid("conditions must be a list")
+        return _normalize_conditions(data)
 
 
 _MODE_OPTIONS = [
@@ -150,7 +150,8 @@ class InputBooleanGroupConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
                 vol.Required(CONF_MODE, default=MODE_ANY): selector.SelectSelector(
                     selector.SelectSelectorConfig(options=_MODE_OPTIONS)
                 ),
-            }
+            },
+            extra=vol.REMOVE_EXTRA,
         )
 
         return self.async_show_form(step_id="user", data_schema=schema, errors=errors)
@@ -173,7 +174,8 @@ class InputBooleanGroupConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
         schema = vol.Schema(
             {
                 vol.Required(CONF_ENTITIES): _entity_selector(),
-            }
+            },
+            extra=vol.REMOVE_EXTRA,
         )
 
         return self.async_show_form(
@@ -201,7 +203,8 @@ class InputBooleanGroupConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
             {
                 vol.Optional(CONF_ENTITIES_ON, default=[]): _entity_selector(),
                 vol.Optional(CONF_ENTITIES_OFF, default=[]): _entity_selector(),
-            }
+            },
+            extra=vol.REMOVE_EXTRA,
         )
 
         return self.async_show_form(
@@ -229,7 +232,8 @@ class InputBooleanGroupConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
         schema = vol.Schema(
             {
                 vol.Required(CONF_CONDITIONS, default=[]): _condition_selector(),
-            }
+            },
+            extra=vol.REMOVE_EXTRA,
         )
 
         return self.async_show_form(
@@ -288,7 +292,8 @@ class InputBooleanGroupOptionsFlowHandler(config_entries.OptionsFlow):
                 ): selector.SelectSelector(
                     selector.SelectSelectorConfig(options=_MODE_OPTIONS)
                 ),
-            }
+            },
+            extra=vol.REMOVE_EXTRA,
         )
 
         return self.async_show_form(step_id="init", data_schema=schema, errors=errors)
@@ -311,7 +316,8 @@ class InputBooleanGroupOptionsFlowHandler(config_entries.OptionsFlow):
                 vol.Required(
                     CONF_ENTITIES, default=self._get(CONF_ENTITIES, [])
                 ): _entity_selector(),
-            }
+            },
+            extra=vol.REMOVE_EXTRA,
         )
 
         return self.async_show_form(
@@ -341,7 +347,8 @@ class InputBooleanGroupOptionsFlowHandler(config_entries.OptionsFlow):
                 vol.Optional(
                     CONF_ENTITIES_OFF, default=self._get(CONF_ENTITIES_OFF, [])
                 ): _entity_selector(),
-            }
+            },
+            extra=vol.REMOVE_EXTRA,
         )
 
         return self.async_show_form(
@@ -369,7 +376,8 @@ class InputBooleanGroupOptionsFlowHandler(config_entries.OptionsFlow):
                 vol.Required(
                     CONF_CONDITIONS, default=self._get(CONF_CONDITIONS, [])
                 ): _condition_selector(),
-            }
+            },
+            extra=vol.REMOVE_EXTRA,
         )
 
         return self.async_show_form(
