@@ -173,6 +173,16 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     else:
         mode = MODE_ALL if _get(CONF_ALL_MODE, False) else MODE_ANY
 
+    raw_conditions = _get(CONF_CONDITIONS, [])
+    conditions = _normalize_conditions(raw_conditions)
+    if mode == MODE_CONDITIONS:
+        _LOGGER.warning(
+            "ibg[%s] raw conditions: %s", entry.data["name"], raw_conditions
+        )
+        _LOGGER.warning(
+            "ibg[%s] normalized conditions: %s", entry.data["name"], conditions
+        )
+
     entity = InputBooleanGroup(
         unique_id=entry.entry_id,
         name=entry.data["name"],
@@ -181,7 +191,7 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
         entity_ids=_get(CONF_ENTITIES, []),
         entities_on=_get(CONF_ENTITIES_ON, []),
         entities_off=_get(CONF_ENTITIES_OFF, []),
-        conditions=_normalize_conditions(_get(CONF_CONDITIONS, [])),
+        conditions=conditions,
     )
 
     await component.async_add_entities([entity])
@@ -303,6 +313,15 @@ class InputBooleanGroup(RestoreEntity):
                     err,
                 )
 
+        if self._mode == MODE_CONDITIONS:
+            _LOGGER.warning(
+                "ibg[%s] compiled %d/%d condition checks; tracked ids: %s",
+                self.name,
+                len(self._condition_checks),
+                len(self._conditions),
+                self._tracked_ids,
+            )
+
         self._async_start_tracking()
         await self._async_update_and_write()
 
@@ -394,8 +413,10 @@ class InputBooleanGroup(RestoreEntity):
     async def _async_check_conditions(self) -> bool:
         """Evaluate pre-compiled HA conditions; returns True if all pass."""
         try:
-            for check in self._condition_checks:
-                if not check(self.hass, {}):
+            for i, check in enumerate(self._condition_checks):
+                result = check(self.hass, {})
+                _LOGGER.warning("ibg[%s] check[%d] result: %s", self.name, i, result)
+                if not result:
                     return False
             return True
         except Exception as err:  # noqa: BLE001
