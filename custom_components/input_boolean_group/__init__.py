@@ -8,6 +8,7 @@ from homeassistant.const import (
     ATTR_ENTITY_ID,
     SERVICE_TURN_OFF,
     SERVICE_TURN_ON,
+    STATE_OFF,
     STATE_ON,
     STATE_UNAVAILABLE,
     STATE_UNKNOWN,
@@ -45,10 +46,6 @@ _LOGGER = logging.getLogger(__name__)
 CONFIG_SCHEMA = cv.config_entry_only_config_schema(DOMAIN)
 
 _UNAVAILABLE_STATES = frozenset({STATE_UNAVAILABLE, STATE_UNKNOWN})
-
-# Keys written by step 1 of the config flow (name, icon, mode).
-_STEP1_KEYS = frozenset({"name", "icon", CONF_MODE})
-
 
 def _extract_entity_ids_from_conditions(conditions: list[dict]) -> list[str]:
     """Recursively collect entity IDs referenced inside a condition list.
@@ -209,7 +206,7 @@ class InputBooleanGroup(RestoreEntity):
     @property
     def state(self) -> str:
         """Return the group state as on/off."""
-        return STATE_ON if self._is_on else "off"
+        return STATE_ON if self._is_on else STATE_OFF
 
     @property
     def is_on(self) -> bool:
@@ -239,15 +236,14 @@ class InputBooleanGroup(RestoreEntity):
             self._is_on = last_state.state == STATE_ON
 
         # Compile conditions once at setup time to avoid per-event overhead.
-        if self._conditions:
+        for cond in self._conditions:
             try:
-                self._condition_checks = [
+                self._condition_checks.append(
                     await cond_helper.async_from_config(self.hass, cond)
-                    for cond in self._conditions
-                ]
+                )
             except Exception as err:  # noqa: BLE001
                 _LOGGER.error(
-                    "Failed to compile conditions for %s: %s — group will stay OFF",
+                    "Failed to compile condition for %s: %s — condition skipped",
                     self.name,
                     err,
                 )
@@ -303,30 +299,37 @@ class InputBooleanGroup(RestoreEntity):
             return False
         return all(states) if self._mode == MODE_ALL else any(states)
 
-    def _entity_matches(self, eid: str, *, expected_on: bool) -> bool:
-        """Return True if entity is available and matches the expected state."""
-        state = self.hass.states.get(eid)
-        return (
-            state is not None
-            and state.state not in _UNAVAILABLE_STATES
-            and (state.state == STATE_ON) == expected_on
-        )
-
     def _compute_union_state(self) -> bool:
-        """Return True when entities_on are all ON and entities_off are all OFF."""
+        """Return True when entities_on are all ON and entities_off are all OFF.
+
+        Unavailable entities are skipped, consistent with any/all mode.
+        If all tracked entities are unavailable, returns False.
+        """
         if not self._entities_on and not self._entities_off:
             return False
-        return all(
-            self._entity_matches(e, expected_on=True) for e in self._entities_on
-        ) and all(
-            self._entity_matches(e, expected_on=False) for e in self._entities_off
-        )
+
+        on_results: list[bool] = []
+        for eid in self._entities_on:
+            state = self.hass.states.get(eid)
+            if state is not None and state.state not in _UNAVAILABLE_STATES:
+                on_results.append(state.state == STATE_ON)
+
+        off_results: list[bool] = []
+        for eid in self._entities_off:
+            state = self.hass.states.get(eid)
+            if state is not None and state.state not in _UNAVAILABLE_STATES:
+                off_results.append(state.state != STATE_ON)
+
+        if not on_results and not off_results:
+            return False
+
+        return all(on_results) and all(off_results)
 
     async def _async_check_conditions(self) -> bool:
         """Evaluate pre-compiled HA conditions; returns True if all pass."""
         try:
             for check in self._condition_checks:
-                if not check(self.hass, None):
+                if not check(self.hass, {}):
                     return False
             return True
         except Exception as err:  # noqa: BLE001
