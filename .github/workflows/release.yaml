@@ -4,6 +4,11 @@ on:
   push:
     tags:
       - "v*.*.*"
+  workflow_dispatch:
+    inputs:
+      version:
+        description: "Version to release (e.g. 0.1.0)"
+        required: true
 
 permissions:
   contents: write
@@ -15,10 +20,20 @@ jobs:
     steps:
       - uses: actions/checkout@v6
 
+      - name: Resolve version and tag
+        id: ver
+        run: |
+          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
+            VERSION="${{ inputs.version }}"
+          else
+            VERSION="${GITHUB_REF_NAME#v}"
+          fi
+          echo "version=${VERSION}" >> "$GITHUB_OUTPUT"
+          echo "tag=v${VERSION}" >> "$GITHUB_OUTPUT"
+
       - name: Update manifest version
         run: |
-          VERSION="${GITHUB_REF_NAME#v}"
-          jq --arg v "$VERSION" '.version = $v' \
+          jq --arg v "${{ steps.ver.outputs.version }}" '.version = $v' \
               custom_components/input_boolean_group/manifest.json > tmp.json \
             && mv tmp.json custom_components/input_boolean_group/manifest.json
 
@@ -27,10 +42,17 @@ jobs:
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
           git add custom_components/input_boolean_group/manifest.json
-          git diff --cached --quiet || git commit -m "chore: bump version to ${GITHUB_REF_NAME#v}"
+          git diff --cached --quiet || git commit -m "chore: bump version to ${{ steps.ver.outputs.version }}"
           git push origin HEAD:main || true
+
+      - name: Create tag (workflow_dispatch only)
+        if: github.event_name == 'workflow_dispatch'
+        run: |
+          git tag "${{ steps.ver.outputs.tag }}" || true
+          git push origin "${{ steps.ver.outputs.tag }}" || true
 
       - name: Create GitHub Release
         uses: softprops/action-gh-release@v2
         with:
+          tag_name: ${{ steps.ver.outputs.tag }}
           generate_release_notes: true
