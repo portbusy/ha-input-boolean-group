@@ -53,12 +53,17 @@ _UNAVAILABLE_STATES = frozenset({STATE_UNAVAILABLE, STATE_UNKNOWN})
 def _normalize_conditions(conditions: list[dict]) -> list[dict]:
     """Normalize raw condition dicts to forms accepted by async_from_config.
 
-    The HA frontend condition editor sometimes generates data that its own
-    backend schema rejects:
+    Handles several mismatches between the HA frontend condition editor and
+    the backend condition schema:
+
     - state: entity_id as single-item list → string; redundant match:all removed
     - state: state as single-item list → string
     - or/and/not: spurious `mode` key removed
     - template: value_template as {template: "..."} dict → plain string
+    - action conditions (domain.is_on / domain.is_off with target/options):
+      converted to equivalent classic `state` conditions; the `for` key is
+      kept only when non-zero, and only when it's already a timedelta-compatible
+      value (HA passes it as a string '00:00:00' which breaks datetime math).
 
     Called both from config_flow (before saving) and from async_setup_entry
     (at load time, to fix entries saved before normalization was in place).
@@ -66,7 +71,33 @@ def _normalize_conditions(conditions: list[dict]) -> list[dict]:
     result: list[dict] = []
     for raw in conditions:
         cond: dict[str, Any] = dict(raw)
-        cond_type = cond.get("condition")
+        cond_type = cond.get("condition", "")
+
+        # Action-condition format: domain.is_on / domain.is_off
+        # Example: {'condition': 'switch.is_on', 'target': {'entity_id': '...'}, 'options': {...}}
+        if isinstance(cond_type, str) and "." in cond_type and "target" in cond:
+            target = cond.get("target") or {}
+            entity_id = target.get("entity_id")
+            options = cond.get("options") or {}
+            state_val = (
+                "on" if cond_type.endswith(".is_on")
+                else "off" if cond_type.endswith(".is_off")
+                else None
+            )
+            if state_val and entity_id:
+                new_cond: dict[str, Any] = {
+                    "condition": "state",
+                    "entity_id": entity_id,
+                    "state": state_val,
+                }
+                for_val = options.get("for")
+                # Keep 'for' only when it is a non-zero, timedelta-compatible value.
+                # The frontend often emits '00:00:00' which causes datetime - str errors.
+                if for_val and for_val not in ("0", "00:00:00", "0:00:00"):
+                    new_cond["for"] = for_val
+                cond = new_cond
+                cond_type = "state"
+
         if cond_type == "state":
             entity_id = cond.get("entity_id")
             if isinstance(entity_id, list) and len(entity_id) == 1:
@@ -81,6 +112,7 @@ def _normalize_conditions(conditions: list[dict]) -> list[dict]:
             vt = cond.get("value_template")
             if isinstance(vt, dict) and "template" in vt:
                 cond["value_template"] = vt["template"]
+
         for nested_key in ("conditions", "sequence"):
             nested = cond.get(nested_key)
             if isinstance(nested, list):
@@ -173,15 +205,7 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     else:
         mode = MODE_ALL if _get(CONF_ALL_MODE, False) else MODE_ANY
 
-    raw_conditions = _get(CONF_CONDITIONS, [])
-    conditions = _normalize_conditions(raw_conditions)
-    if mode == MODE_CONDITIONS:
-        _LOGGER.warning(
-            "ibg[%s] raw conditions: %s", entry.data["name"], raw_conditions
-        )
-        _LOGGER.warning(
-            "ibg[%s] normalized conditions: %s", entry.data["name"], conditions
-        )
+    conditions = _normalize_conditions(_get(CONF_CONDITIONS, []))
 
     entity = InputBooleanGroup(
         unique_id=entry.entry_id,
@@ -313,15 +337,6 @@ class InputBooleanGroup(RestoreEntity):
                     err,
                 )
 
-        if self._mode == MODE_CONDITIONS:
-            _LOGGER.warning(
-                "ibg[%s] compiled %d/%d condition checks; tracked ids: %s",
-                self.name,
-                len(self._condition_checks),
-                len(self._conditions),
-                self._tracked_ids,
-            )
-
         self._async_start_tracking()
         await self._async_update_and_write()
 
@@ -413,10 +428,8 @@ class InputBooleanGroup(RestoreEntity):
     async def _async_check_conditions(self) -> bool:
         """Evaluate pre-compiled HA conditions; returns True if all pass."""
         try:
-            for i, check in enumerate(self._condition_checks):
-                result = check(self.hass, {})
-                _LOGGER.warning("ibg[%s] check[%d] result: %s", self.name, i, result)
-                if not result:
+            for check in self._condition_checks:
+                if not check(self.hass, {}):
                     return False
             return True
         except Exception as err:  # noqa: BLE001
