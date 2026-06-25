@@ -25,18 +25,23 @@ _STEP1_KEYS = frozenset({"name", "icon", CONF_MODE})
 
 
 def _normalize_conditions(conditions: list[dict]) -> list[dict]:
-    """Normalize conditions to visual-editor-compatible form where possible.
+    """Normalize conditions to HA-backend-compatible form.
 
-    The HA condition editor generates entity_id as a list and adds match:all
-    even for single-entity state conditions, which triggers a visual-editor
-    warning. Normalize single-item lists to scalars so the warning disappears.
-    Recurses into nested condition lists (and/or/not).
+    The HA frontend condition editor generates data that sometimes doesn't
+    match the backend ConditionSelector schema:
+    - state: entity_id as single-item list → string; match:all removed
+    - state: state as single-item list → string
+    - or/and: spurious `mode` key removed (not in backend schema)
+    - template: value_template as {template: "..."} dict → plain string
+
+    Recurses into nested condition lists.
     """
     result: list[dict] = []
     for raw in conditions:
         cond: dict[str, Any] = dict(raw)
+        cond_type = cond.get("condition")
 
-        if cond.get("condition") == "state":
+        if cond_type == "state":
             entity_id = cond.get("entity_id")
             if isinstance(entity_id, list) and len(entity_id) == 1:
                 cond["entity_id"] = entity_id[0]
@@ -45,6 +50,17 @@ def _normalize_conditions(conditions: list[dict]) -> list[dict]:
             if isinstance(state, list) and len(state) == 1:
                 cond["state"] = state[0]
 
+        elif cond_type in ("or", "and", "not"):
+            # Frontend sometimes emits mode:or/and redundantly; backend rejects it.
+            cond.pop("mode", None)
+
+        elif cond_type == "template":
+            # Frontend stores value_template as {template: "..."} dict; backend
+            # requires a plain string.
+            vt = cond.get("value_template")
+            if isinstance(vt, dict) and "template" in vt:
+                cond["value_template"] = vt["template"]
+
         for nested_key in ("conditions", "sequence"):
             nested = cond.get(nested_key)
             if isinstance(nested, list):
@@ -52,6 +68,21 @@ def _normalize_conditions(conditions: list[dict]) -> list[dict]:
 
         result.append(cond)
     return result
+
+
+class _ConditionSelector(selector.ConditionSelector):
+    """ConditionSelector that normalizes frontend-generated conditions before
+    the backend schema validation runs.
+
+    HA's frontend condition editor produces data (mode key in or/and, dict
+    value_template) that ConditionSelector's own schema rejects. Subclassing
+    lets us fix the data in place while keeping the condition-editor UI widget.
+    """
+
+    def __call__(self, data: Any) -> Any:
+        if isinstance(data, list):
+            data = _normalize_conditions(data)
+        return super().__call__(data)
 
 
 _MODE_OPTIONS = [
@@ -80,8 +111,8 @@ def _entity_selector() -> selector.EntitySelector:
     )
 
 
-def _condition_selector() -> selector.ConditionSelector:
-    return selector.ConditionSelector()
+def _condition_selector() -> _ConditionSelector:
+    return _ConditionSelector()
 
 
 class InputBooleanGroupConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
