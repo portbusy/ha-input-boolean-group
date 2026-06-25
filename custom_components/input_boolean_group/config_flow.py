@@ -23,6 +23,37 @@ from .const import (
 
 _STEP1_KEYS = frozenset({"name", "icon", CONF_MODE})
 
+
+def _normalize_conditions(conditions: list[dict]) -> list[dict]:
+    """Normalize conditions to visual-editor-compatible form where possible.
+
+    The HA condition editor generates entity_id as a list and adds match:all
+    even for single-entity state conditions, which triggers a visual-editor
+    warning. Normalize single-item lists to scalars so the warning disappears.
+    Recurses into nested condition lists (and/or/not).
+    """
+    result: list[dict] = []
+    for raw in conditions:
+        cond: dict[str, Any] = dict(raw)
+
+        if cond.get("condition") == "state":
+            entity_id = cond.get("entity_id")
+            if isinstance(entity_id, list) and len(entity_id) == 1:
+                cond["entity_id"] = entity_id[0]
+                cond.pop("match", None)
+            state = cond.get("state")
+            if isinstance(state, list) and len(state) == 1:
+                cond["state"] = state[0]
+
+        for nested_key in ("conditions", "sequence"):
+            nested = cond.get(nested_key)
+            if isinstance(nested, list):
+                cond[nested_key] = _normalize_conditions(nested)
+
+        result.append(cond)
+    return result
+
+
 _MODE_OPTIONS = [
     {
         "value": MODE_ANY,
@@ -157,6 +188,9 @@ class InputBooleanGroupConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
                 errors["base"] = "no_conditions"
             else:
                 self._data.update(user_input)
+                self._data[CONF_CONDITIONS] = _normalize_conditions(
+                    self._data[CONF_CONDITIONS]
+                )
                 return self.async_create_entry(
                     title=self._data["name"], data=self._data
                 )
@@ -294,6 +328,9 @@ class InputBooleanGroupOptionsFlowHandler(config_entries.OptionsFlow):
                 errors["base"] = "no_conditions"
             else:
                 self._options.update(user_input)
+                self._options[CONF_CONDITIONS] = _normalize_conditions(
+                    self._options[CONF_CONDITIONS]
+                )
                 return self.async_create_entry(title="", data=self._options)
 
         schema = vol.Schema(
