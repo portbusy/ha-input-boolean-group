@@ -18,6 +18,7 @@ from homeassistant.const import (
 from homeassistant.core import Event, HomeAssistant, callback
 from homeassistant.helpers import condition as cond_helper
 from homeassistant.helpers import config_validation as cv
+from homeassistant.helpers import template as template_helper
 from homeassistant.helpers import entity_registry as er
 from homeassistant.helpers.entity_component import EntityComponent
 from homeassistant.helpers.event import async_track_state_change_event
@@ -119,6 +120,26 @@ def _normalize_conditions(conditions: list[dict]) -> list[dict]:
                 cond[nested_key] = _normalize_conditions(nested)
         result.append(cond)
     return result
+
+
+def _prepare_for_compile(hass: HomeAssistant, cond: dict) -> dict:
+    """Convert value_template strings to Template objects before async_from_config.
+
+    In HA 2026+, async_from_config no longer coerces value_template strings to
+    Template objects internally. Calling the compiled checker on a raw string
+    raises AttributeError ('str' has no attribute 'async_render_to_info').
+    """
+    cond = dict(cond)
+    ctype = cond.get("condition")
+    if ctype == "template":
+        vt = cond.get("value_template")
+        if isinstance(vt, str):
+            cond["value_template"] = template_helper.Template(vt, hass)
+    for nested_key in ("conditions", "sequence"):
+        nested = cond.get(nested_key)
+        if isinstance(nested, list):
+            cond[nested_key] = [_prepare_for_compile(hass, c) for c in nested]
+    return cond
 
 
 # Matches states("entity.id"), is_state("entity.id", ...), state_attr("entity.id", ...)
@@ -328,10 +349,13 @@ class InputBooleanGroup(RestoreEntity):
             self._is_on = last_state.state == STATE_ON
 
         # Compile conditions once at setup time to avoid per-event overhead.
+        # _prepare_for_compile converts value_template strings → Template objects
+        # because async_from_config in HA 2026+ no longer does this implicitly.
         for cond in self._conditions:
             try:
+                prepared = _prepare_for_compile(self.hass, cond)
                 self._condition_checks.append(
-                    await cond_helper.async_from_config(self.hass, cond)
+                    await cond_helper.async_from_config(self.hass, prepared)
                 )
             except Exception as err:  # noqa: BLE001
                 _LOGGER.error(
