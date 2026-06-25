@@ -138,9 +138,10 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     # Without this, the Helpers UI cannot find the options flow for editing
     # and the integration page shows no entity count.
     ent_reg = er.async_get(hass)
-    if entity.entity_id and (ent_entry := ent_reg.async_get(entity.entity_id)):
+    entity_id = entity.entity_id or ent_reg.async_get_entity_id(DOMAIN, DOMAIN, entry.entry_id)
+    if entity_id and (ent_entry := ent_reg.async_get(entity_id)):
         if ent_entry.config_entry_id != entry.entry_id:
-            ent_reg.async_update_entity(entity.entity_id, config_entry_id=entry.entry_id)
+            ent_reg.async_update_entity(entity_id, config_entry_id=entry.entry_id)
 
     entry.async_on_unload(entry.add_update_listener(async_reload_entry))
 
@@ -274,7 +275,7 @@ class InputBooleanGroup(RestoreEntity):
         )
 
     async def _async_update_and_write(self) -> None:
-        """Recompute group state, evaluate conditions, then push to HA."""
+        """Recompute group state then push to HA."""
         if self._mode == MODE_CONDITIONS:
             self._is_on = (
                 await self._async_check_conditions()
@@ -283,8 +284,6 @@ class InputBooleanGroup(RestoreEntity):
             )
         else:
             self._is_on = self._compute_base_state()
-            if self._is_on and self._condition_checks:
-                self._is_on = await self._async_check_conditions()
         self.async_write_ha_state()
 
     def _compute_base_state(self) -> bool:

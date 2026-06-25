@@ -96,7 +96,7 @@ class InputBooleanGroupConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
     async def async_step_entities(
         self, user_input: dict[str, Any] | None = None
     ) -> config_entries.ConfigFlowResult:
-        """Step 2 (any/all) – entity list and optional conditions."""
+        """Step 2 (any/all) – entity list."""
         errors: dict[str, str] = {}
 
         if user_input is not None:
@@ -111,7 +111,6 @@ class InputBooleanGroupConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
         schema = vol.Schema(
             {
                 vol.Required(CONF_ENTITIES): _entity_selector(),
-                vol.Optional(CONF_CONDITIONS, default=[]): _condition_selector(),
             }
         )
 
@@ -122,7 +121,7 @@ class InputBooleanGroupConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
     async def async_step_union(
         self, user_input: dict[str, Any] | None = None
     ) -> config_entries.ConfigFlowResult:
-        """Step 2 (union) – entities_on, entities_off and optional conditions."""
+        """Step 2 (union) – entities_on and entities_off."""
         errors: dict[str, str] = {}
 
         if user_input is not None:
@@ -140,7 +139,6 @@ class InputBooleanGroupConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
             {
                 vol.Optional(CONF_ENTITIES_ON, default=[]): _entity_selector(),
                 vol.Optional(CONF_ENTITIES_OFF, default=[]): _entity_selector(),
-                vol.Optional(CONF_CONDITIONS, default=[]): _condition_selector(),
             }
         )
 
@@ -233,7 +231,7 @@ class InputBooleanGroupOptionsFlowHandler(config_entries.OptionsFlow):
     async def async_step_entities(
         self, user_input: dict[str, Any] | None = None
     ) -> config_entries.ConfigFlowResult:
-        """Step 2 (any/all) – entity list and optional conditions."""
+        """Step 2 (any/all) – entity list."""
         errors: dict[str, str] = {}
 
         if user_input is not None:
@@ -248,9 +246,6 @@ class InputBooleanGroupOptionsFlowHandler(config_entries.OptionsFlow):
                 vol.Required(
                     CONF_ENTITIES, default=self._get(CONF_ENTITIES, [])
                 ): _entity_selector(),
-                vol.Optional(
-                    CONF_CONDITIONS, default=self._get(CONF_CONDITIONS, [])
-                ): _condition_selector(),
             }
         )
 
@@ -261,7 +256,7 @@ class InputBooleanGroupOptionsFlowHandler(config_entries.OptionsFlow):
     async def async_step_union(
         self, user_input: dict[str, Any] | None = None
     ) -> config_entries.ConfigFlowResult:
-        """Step 2 (union) – entities_on, entities_off and optional conditions."""
+        """Step 2 (union) – entities_on and entities_off."""
         errors: dict[str, str] = {}
 
         if user_input is not None:
@@ -281,9 +276,6 @@ class InputBooleanGroupOptionsFlowHandler(config_entries.OptionsFlow):
                 vol.Optional(
                     CONF_ENTITIES_OFF, default=self._get(CONF_ENTITIES_OFF, [])
                 ): _entity_selector(),
-                vol.Optional(
-                    CONF_CONDITIONS, default=self._get(CONF_CONDITIONS, [])
-                ): _condition_selector(),
             }
         )
 
