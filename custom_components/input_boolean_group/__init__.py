@@ -15,6 +15,7 @@ from homeassistant.const import (
 from homeassistant.core import Event, HomeAssistant, callback
 from homeassistant.helpers import condition as cond_helper
 from homeassistant.helpers import config_validation as cv
+from homeassistant.helpers import entity_registry as er
 from homeassistant.helpers.entity_component import EntityComponent
 from homeassistant.helpers.event import async_track_state_change_event
 from homeassistant.helpers.restore_state import RestoreEntity
@@ -132,6 +133,16 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     )
 
     await component.async_add_entities([entity])
+
+    # EntityComponent does not auto-link entities to their config entry.
+    # Without this, the Helpers UI cannot find the options flow for editing
+    # and the integration page shows no entity count.
+    ent_reg = er.async_get(hass)
+    entity_id = ent_reg.async_get_entity_id(DOMAIN, DOMAIN, entry.entry_id)
+    if entity_id and (ent_entry := ent_reg.async_get(entity_id)):
+        if ent_entry.config_entry_id != entry.entry_id:
+            ent_reg.async_update_entity(entity_id, config_entry_id=entry.entry_id)
+
     entry.async_on_unload(entry.add_update_listener(async_reload_entry))
 
     return True
