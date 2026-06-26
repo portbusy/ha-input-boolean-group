@@ -51,8 +51,13 @@ jobs:
           git tag "${{ steps.ver.outputs.tag }}" || true
           git push origin "${{ steps.ver.outputs.tag }}" || true
 
-      - name: Create GitHub Release
-        uses: softprops/action-gh-release@v3
-        with:
-          tag_name: ${{ steps.ver.outputs.tag }}
-          generate_release_notes: true
+      - name: Create or update GitHub Release
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          TAG="${{ steps.ver.outputs.tag }}"
+          if gh release view "$TAG" &>/dev/null; then
+            gh release edit "$TAG" --generate-notes
+          else
+            gh release create "$TAG" --generate-notes
+          fi
