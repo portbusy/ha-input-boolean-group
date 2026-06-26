@@ -1,0 +1,109 @@
+{
+  "config": {
+    "step": {
+      "user": {
+        "title": "Create Input Boolean Group",
+        "description": "Choose a name, optional icon and the state evaluation mode for the group.",
+        "data": {
+          "name": "Name",
+          "icon": "Icon",
+          "mode": "State mode"
+        },
+        "data_description": {
+          "mode": "How member entity states are combined to determine the group state."
+        }
+      },
+      "entities": {
+        "title": "Select Entities",
+        "description": "Pick the input_boolean entities that belong to this group.",
+        "data": {
+          "entities": "Input boolean entities"
+        },
+        "data_description": {
+          "entities": "The group is ON based on the selected mode applied to these entities."
+        }
+      },
+      "union": {
+        "title": "Union — Custom States",
+        "description": "Specify which entities must be ON and which must be OFF. The group is ON only when all constraints are satisfied.",
+        "data": {
+          "entities_on": "Entities that must be ON",
+          "entities_off": "Entities that must be OFF"
+        },
+        "data_description": {
+          "entities_on": "The group is ON only if ALL of these entities are ON.",
+          "entities_off": "The group is ON only if ALL of these entities are OFF."
+        }
+      },
+      "conditions": {
+        "title": "Conditions — Custom Logic",
+        "description": "Define the group state using full OR/AND/NOT logic, exactly like automation conditions. The group is ON when all top-level conditions pass. Use an OR condition wrapping multiple AND conditions to express alternative combinations.",
+        "data": {
+          "conditions": "Conditions"
+        },
+        "data_description": {
+          "conditions": "Supports OR, AND, NOT, state, template, numeric_state and all other HA condition types. Entity IDs referenced in state conditions are tracked automatically."
+        }
+      }
+    },
+    "error": {
+      "no_entities": "You must select at least one input_boolean entity.",
+      "no_union_entities": "You must select at least one entity for 'must be ON' or 'must be OFF'.",
+      "no_conditions": "You must add at least one condition."
+    },
+    "abort": {
+      "already_configured": "This group is already configured."
+    }
+  },
+  "options": {
+    "step": {
+      "init": {
+        "title": "Edit Input Boolean Group",
+        "description": "Change the state evaluation mode.",
+        "data": {
+          "mode": "State mode"
+        },
+        "data_description": {
+          "mode": "How member entity states are combined to determine the group state."
+        }
+      },
+      "entities": {
+        "title": "Edit Entities",
+        "description": "Update the member entities.",
+        "data": {
+          "entities": "Input boolean entities"
+        },
+        "data_description": {
+          "entities": "The group is ON based on the selected mode applied to these entities."
+        }
+      },
+      "union": {
+        "title": "Edit Union — Custom States",
+        "description": "Update which entities must be ON and which must be OFF.",
+        "data": {
+          "entities_on": "Entities that must be ON",
+          "entities_off": "Entities that must be OFF"
+        },
+        "data_description": {
+          "entities_on": "The group is ON only if ALL of these entities are ON.",
+          "entities_off": "The group is ON only if ALL of these entities are OFF."
+        }
+      },
+      "conditions": {
+        "title": "Edit Conditions — Custom Logic",
+        "description": "Update the OR/AND/NOT conditions that determine the group state.",
+        "data": {
+          "conditions": "Conditions"
+        },
+        "data_description": {
+          "conditions": "Use OR, AND, NOT, state, template, numeric_state and all other HA condition types. Entity IDs are detected automatically for state-change tracking."
+        }
+      }
+    },
+    "error": {
+      "no_entities": "You must select at least one input_boolean entity.",
+      "no_union_entities": "You must select at least one entity for 'must be ON' or 'must be OFF'.",
+      "no_conditions": "You must add at least one condition."
+    }
+  }
+}
