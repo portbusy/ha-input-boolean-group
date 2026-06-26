@@ -133,13 +133,12 @@ async def _compile_condition_resilient(
     cond: dict,
     name: str,
 ) -> Any:
-    """Compile a condition with per-sub-condition resilience for and/or/not.
+    """Compile a single condition using HA's full validation + compilation pipeline.
 
-    Unlike async_from_config, which fails the entire and/or/not block when one
-    sub-condition has an unknown type, this function compiles each sub-condition
-    individually and skips only the ones that fail. Unknown leaf types (e.g.
-    zone.occupancy_is_detected) are skipped with a warning rather than aborting
-    the parent.
+    Mirrors the automation path: async_validate_condition_config → async_from_config.
+    For and/or/not, each sub-condition is compiled individually so that an unknown
+    or unsupported leaf (e.g. an experimental zone condition) is skipped with a
+    WARNING without aborting the parent block.
     """
     ctype = cond.get("condition")
 
@@ -171,7 +170,11 @@ async def _compile_condition_resilient(
         return _not
 
     try:
-        prepared = _prepare_for_compile(hass, cond)
+        # async_validate_condition_config mirrors what automations do before compiling:
+        # normalises entity_id to list, validates schema, loads device/platform handlers.
+        # This replaces our manual per-type normalisations for the compilation path.
+        validated = await cond_helper.async_validate_condition_config(hass, cond)
+        prepared = _prepare_for_compile(hass, validated)
         return await cond_helper.async_from_config(hass, prepared)
     except Exception as err:  # noqa: BLE001
         _LOGGER.warning(
@@ -181,26 +184,17 @@ async def _compile_condition_resilient(
 
 
 def _prepare_for_compile(hass: HomeAssistant, cond: dict) -> dict:
-    """Prepare a condition dict for async_from_config.
+    """Convert value_template strings to Template objects before async_from_config.
 
-    Two HA 2026+ fixes applied recursively:
-    - value_template strings → Template objects (async_from_config no longer coerces)
-    - state entity_id strings → single-item lists (HA 2026 iterates strings char-by-char)
+    async_validate_condition_config handles all other normalisations (entity_id,
+    schema, platform loading). This only covers the one gap it leaves: HA 2026+
+    no longer coerces value_template strings to Template objects internally.
     """
     cond = dict(cond)
-    ctype = cond.get("condition")
-    if ctype == "template":
+    if cond.get("condition") == "template":
         vt = cond.get("value_template")
         if isinstance(vt, str):
             cond["value_template"] = template_helper.Template(vt, hass)
-    elif ctype == "state":
-        entity_id = cond.get("entity_id")
-        if isinstance(entity_id, str):
-            cond["entity_id"] = [entity_id]
-    for nested_key in ("conditions", "sequence"):
-        nested = cond.get(nested_key)
-        if isinstance(nested, list):
-            cond[nested_key] = [_prepare_for_compile(hass, c) for c in nested]
     return cond
 
 
