@@ -284,8 +284,6 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
 
     raw_conditions = _get(CONF_CONDITIONS, [])
     conditions = _normalize_conditions(raw_conditions)
-    if mode == MODE_CONDITIONS:
-        _LOGGER.warning("ibg[%s] normalized: %s", entry.data["name"], conditions)
 
     # If normalization changed the stored data, write it back so the frontend
     # visual editor always reads the canonical (string) form.
@@ -424,12 +422,6 @@ class InputBooleanGroup(RestoreEntity):
             if check is not None:
                 self._condition_checks.append(check)
 
-        if self._mode == MODE_CONDITIONS:
-            _LOGGER.warning(
-                "ibg[%s] checks compiled: %d/%d",
-                self.name, len(self._condition_checks), len(self._conditions),
-            )
-
         self._async_start_tracking()
         await self._async_update_and_write()
 
@@ -537,10 +529,8 @@ class InputBooleanGroup(RestoreEntity):
     async def _async_check_conditions(self) -> bool:
         """Evaluate pre-compiled HA conditions; returns True if all pass."""
         try:
-            for i, check in enumerate(self._condition_checks):
-                result = check(self.hass, {})
-                _LOGGER.warning("ibg[%s] check[%d]=%s", self.name, i, result)
-                if not result:
+            for check in self._condition_checks:
+                if not check(self.hass, {}):
                     return False
             return True
         except Exception as err:  # noqa: BLE001
