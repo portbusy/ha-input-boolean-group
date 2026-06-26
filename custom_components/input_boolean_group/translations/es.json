@@ -1,0 +1,109 @@
+{
+  "config": {
+    "step": {
+      "user": {
+        "title": "Crear grupo de input boolean",
+        "description": "Elige un nombre, un icono opcional y el modo de evaluación de estado del grupo.",
+        "data": {
+          "name": "Nombre",
+          "icon": "Icono",
+          "mode": "Modo de estado"
+        },
+        "data_description": {
+          "mode": "Cómo se combinan los estados de las entidades miembro para determinar el estado del grupo."
+        }
+      },
+      "entities": {
+        "title": "Seleccionar entidades",
+        "description": "Elige las entidades input_boolean que pertenecen a este grupo.",
+        "data": {
+          "entities": "Entidades input boolean"
+        },
+        "data_description": {
+          "entities": "El grupo está ON según el modo seleccionado aplicado a estas entidades."
+        }
+      },
+      "union": {
+        "title": "Unión — estados personalizados",
+        "description": "Especifica qué entidades deben estar ON y cuáles OFF. El grupo está ON solo cuando todas las restricciones se cumplen.",
+        "data": {
+          "entities_on": "Entidades que deben estar ON",
+          "entities_off": "Entidades que deben estar OFF"
+        },
+        "data_description": {
+          "entities_on": "El grupo está ON solo si TODAS estas entidades están ON.",
+          "entities_off": "El grupo está ON solo si TODAS estas entidades están OFF."
+        }
+      },
+      "conditions": {
+        "title": "Condiciones — lógica personalizada",
+        "description": "Define el estado del grupo con lógica OR/AND/NOT completa, igual que las condiciones de las automatizaciones. El grupo está ON cuando todas las condiciones de nivel superior son verdaderas. Usa una condición OR que englobe varias condiciones AND para expresar combinaciones alternativas.",
+        "data": {
+          "conditions": "Condiciones"
+        },
+        "data_description": {
+          "conditions": "Compatible con OR, AND, NOT, state, template, numeric_state y todos los demás tipos de condición de HA. Los IDs de entidad en las condiciones de estado se rastrean automáticamente."
+        }
+      }
+    },
+    "error": {
+      "no_entities": "Debes seleccionar al menos una entidad input_boolean.",
+      "no_union_entities": "Debes seleccionar al menos una entidad para 'debe estar ON' o 'debe estar OFF'.",
+      "no_conditions": "Debes añadir al menos una condición."
+    },
+    "abort": {
+      "already_configured": "Este grupo ya está configurado."
+    }
+  },
+  "options": {
+    "step": {
+      "init": {
+        "title": "Editar grupo de input boolean",
+        "description": "Cambia el modo de evaluación de estado.",
+        "data": {
+          "mode": "Modo de estado"
+        },
+        "data_description": {
+          "mode": "Cómo se combinan los estados de las entidades miembro para determinar el estado del grupo."
+        }
+      },
+      "entities": {
+        "title": "Editar entidades",
+        "description": "Actualiza las entidades miembro del grupo.",
+        "data": {
+          "entities": "Entidades input boolean"
+        },
+        "data_description": {
+          "entities": "El grupo está ON según el modo seleccionado aplicado a estas entidades."
+        }
+      },
+      "union": {
+        "title": "Editar unión — estados personalizados",
+        "description": "Actualiza qué entidades deben estar ON y cuáles OFF.",
+        "data": {
+          "entities_on": "Entidades que deben estar ON",
+          "entities_off": "Entidades que deben estar OFF"
+        },
+        "data_description": {
+          "entities_on": "El grupo está ON solo si TODAS estas entidades están ON.",
+          "entities_off": "El grupo está ON solo si TODAS estas entidades están OFF."
+        }
+      },
+      "conditions": {
+        "title": "Editar condiciones — lógica personalizada",
+        "description": "Actualiza las condiciones OR/AND/NOT que determinan el estado del grupo.",
+        "data": {
+          "conditions": "Condiciones"
+        },
+        "data_description": {
+          "conditions": "Usa OR, AND, NOT, state, template, numeric_state y todos los demás tipos de condición de HA. Los IDs de entidad se detectan automáticamente para el seguimiento de cambios de estado."
+        }
+      }
+    },
+    "error": {
+      "no_entities": "Debes seleccionar al menos una entidad input_boolean.",
+      "no_union_entities": "Debes seleccionar al menos una entidad para 'debe estar ON' o 'debe estar OFF'.",
+      "no_conditions": "Debes añadir al menos una condición."
+    }
+  }
+}

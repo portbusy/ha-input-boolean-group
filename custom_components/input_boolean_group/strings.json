@@ -37,7 +37,7 @@
       },
       "conditions": {
         "title": "Conditions — Custom Logic",
-        "description": "Define the group state using full OR/AND/NOT logic, exactly like automation conditions. The group is ON when all top-level conditions pass. Use an OR condition wrapping multiple AND conditions to express alternative combinations.",
+        "description": "Define the group state using full OR/AND/NOT logic, the same as automation conditions. The group is ON when all top-level conditions pass. Wrap multiple AND conditions inside an OR to express alternative combinations.",
         "data": {
           "conditions": "Conditions"
         },

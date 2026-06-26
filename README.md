@@ -1,112 +1,77 @@
 # Input Boolean Group
 
 [![hacs_badge](https://img.shields.io/badge/HACS-Custom-41BDF5.svg)](https://github.com/hacs/integration)
+[![Home Assistant Community Forum](https://img.shields.io/badge/Community-Forum-blue?logo=home-assistant)](https://community.home-assistant.io/t/input-boolean-groups/996318)
 
-[![Home Assistant Community Forum](https://img.shields.io/badge/Home%20Assistant-Community%20Forum-blue?logo=home-assistant&style=for-the-badge)](https://community.home-assistant.io/t/input-boolean-groups/996318)
+Group `input_boolean` entities into a single helper — configurable entirely from the UI, no YAML required.
 
-A custom Home Assistant integration that lets you **group `input_boolean` entities** into a single controllable entity — directly from the UI.
+Home Assistant's built-in Group helper supports lights, switches, covers and more, but not `input_boolean`. This integration fills that gap.
 
-Home Assistant's built-in Group helper supports lights, switches, binary sensors, covers, fans, and more — but **not `input_boolean`**. This integration fills that gap.
-
-<br>
-
-[![Open Input Boolean Group on Home Assistant Community Store (HACS).](https://my.home-assistant.io/badges/hacs_repository.svg)](https://my.home-assistant.io/redirect/hacs_repository/?owner=portbusy&repository=ha-input-boolean-group&category=integration)
-
-
-
-## Features
-
-- 🎛️ **UI-configurable**: Create and edit groups via *Settings → Helpers → Create Helper*
-- ⚡ **Live state tracking**: Group state updates instantly when any member changes
-- 🔁 **Command forwarding**: `turn_on` / `turn_off` / `toggle` propagates to all members
-- 🔀 **Any / All mode**: Group is `on` when *any* member is on, or only when *all* are on
-- 🔗 **Union mode**: Specify which entities must be ON and which must be OFF simultaneously
-- 🧠 **Conditions mode**: Full OR/AND/NOT logic — same condition editor as automations
-- 💾 **State restore**: Survives HA restarts
-- 📦 **HACS-compatible**: Easy install via custom repository
+[![Open in HACS](https://my.home-assistant.io/badges/hacs_repository.svg)](https://my.home-assistant.io/redirect/hacs_repository/?owner=portbusy&repository=ha-input-boolean-group&category=integration)
 
 ## Installation
 
-### HACS (Recommended)
+**Via HACS (recommended)**
 
-1. Open HACS in your Home Assistant instance
-2. Click the **⋮** menu → **Custom repositories**
-3. Add `https://github.com/portbusy/ha-input-boolean-group` as an **Integration**
-4. Search for "Input Boolean Group" → Install
-5. Restart Home Assistant
+1. Open HACS and go to *Integrations*
+2. Click the menu → *Custom repositories* and add `https://github.com/portbusy/ha-input-boolean-group` as an Integration
+3. Search for "Input Boolean Group" and install
+4. Restart Home Assistant
 
-### Manual
+**Manual**
 
-1. Copy `custom_components/input_boolean_group/` to your HA `custom_components/` directory
-2. Restart Home Assistant
+Copy `custom_components/input_boolean_group/` into your HA `custom_components/` directory and restart.
 
-## Usage
+## Setup
 
-1. Go to **Settings → Devices & Services → Helpers**
-2. Click **Create Helper** → **Input Boolean Group**
-3. Enter a name, select your mode, configure the entities
-4. The group entity appears as `input_boolean_group.<name>`
+Go to **Settings → Devices & Services → Helpers → Create Helper → Input Boolean Group**, enter a name and choose a mode. The group appears as `input_boolean_group.<name>`.
 
-### Aggregation Modes
+To edit later: click the entity → gear icon → *Configure*.
 
-| Mode | Group is ON when… |
-|------|-------------------|
+## Modes
+
+| Mode | Group is ON when |
+|------|-----------------|
 | **Any** (default) | At least one member is `on` |
 | **All** | Every member is `on` |
 | **Union** | All `entities_on` are `on` AND all `entities_off` are `off` |
-| **Conditions** | All configured HA conditions evaluate to true |
+| **Conditions** | All configured conditions evaluate to true |
 
-#### Any / All
+Unavailable entities are skipped in all modes. If every tracked entity is unavailable, the group is `off`.
 
-Standard aggregation. Select one or more `input_boolean` entities — the group state is computed from all of them.
+### Any / All
 
-Unavailable entities are **ignored** in the computation; the group reflects the state of the remaining available members. If all members are unavailable, the group is `off`.
+Standard aggregation over a list of `input_boolean` entities. `turn_on` and `turn_off` propagate to all members.
 
-#### Union
+### Union
 
-Lets you specify two independent lists:
+Two independent lists: entities that must be ON, and entities that must be OFF. Both must be satisfied simultaneously for the group to be ON.
 
-- **Entities ON** — must all be `on` for the group to be `on`
-- **Entities OFF** — must all be `off` for the group to be `on`
+`turn_on` sets all `entities_on` → `on` and all `entities_off` → `off`. `turn_off` inverts this.
 
-Both conditions must hold simultaneously. At least one list must be non-empty.
+### Conditions
 
-Unavailable entities in either list are **ignored** (same behaviour as Any/All). If all tracked entities are unavailable, the group is `off`.
+Uses Home Assistant's standard condition editor — the same one available in automations. Supports `and`, `or`, `not`, `state`, `numeric_state`, `template`, and any other HA condition type.
 
-`turn_on` sets all `entities_on` → `on` and all `entities_off` → `off`.
-`turn_off` inverts the above: all `entities_on` → `off` and all `entities_off` → `on`.
+The group state is read-only in this mode; `turn_on`, `turn_off` and `toggle` are no-ops. State is recomputed automatically whenever a referenced entity changes. If a condition cannot be compiled at startup, it is skipped and the remaining conditions still apply.
 
-#### Conditions
+## Services
 
-Uses Home Assistant's standard condition editor (the same one available in automations and scripts). You can combine `and`, `or`, `not`, `state`, `numeric_state`, `template`, and any other HA condition type.
-
-The group state is **read-only** in this mode — `turn_on`, `turn_off`, and `toggle` are no-ops. The state is recomputed automatically whenever a referenced entity changes.
-
-If a condition fails to compile at startup, it is **skipped** and an error is logged — the remaining valid conditions still evaluate normally.
-
-### Services
-
-| Service | any/all mode | union mode | conditions mode |
-|---------|-------------|------------|----------------|
+| Service | any / all | union | conditions |
+|---------|-----------|-------|------------|
 | `input_boolean_group.turn_on` | All members → `on` | `entities_on` → `on`, `entities_off` → `off` | no-op |
 | `input_boolean_group.turn_off` | All members → `off` | `entities_on` → `off`, `entities_off` → `on` | no-op |
-| `input_boolean_group.toggle` | Toggles based on current state | Same logic as turn_on/turn_off | no-op |
+| `input_boolean_group.toggle` | Toggles all members | Same logic as turn_on / turn_off | no-op |
 
-### State Attributes
-
-The group entity exposes these attributes:
+## Attributes
 
 | Attribute | Description |
 |-----------|-------------|
-| `mode` | Current mode: `any`, `all`, `union`, or `conditions` |
-| `all_mode` | `true` if mode is `all` (legacy compatibility) |
-| `entity_id` | Tracked entity IDs (any/all/conditions modes) |
-| `entities_on` | Entities required to be ON (union mode only) |
-| `entities_off` | Entities required to be OFF (union mode only) |
-
-### Editing
-
-Click the group entity → gear icon → **Configure** to change members or mode.
+| `mode` | `any`, `all`, `union`, or `conditions` |
+| `all_mode` | `true` when mode is `all` (legacy) |
+| `entity_id` | Tracked entity IDs (any / all / conditions modes) |
+| `entities_on` | Entities required to be ON (union mode) |
+| `entities_off` | Entities required to be OFF (union mode) |
 
 ## License
 

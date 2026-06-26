@@ -1,0 +1,109 @@
+{
+  "config": {
+    "step": {
+      "user": {
+        "title": "Input-Boolean-Gruppe erstellen",
+        "description": "Wähle einen Namen, ein optionales Symbol und den Zustandsauswertungsmodus für die Gruppe.",
+        "data": {
+          "name": "Name",
+          "icon": "Symbol",
+          "mode": "Zustandsmodus"
+        },
+        "data_description": {
+          "mode": "Wie die Zustände der Mitgliedsentitäten kombiniert werden, um den Gruppenstand zu bestimmen."
+        }
+      },
+      "entities": {
+        "title": "Entitäten auswählen",
+        "description": "Wähle die input_boolean-Entitäten aus, die zu dieser Gruppe gehören.",
+        "data": {
+          "entities": "Input-Boolean-Entitäten"
+        },
+        "data_description": {
+          "entities": "Der Gruppenstatus ist ON basierend auf dem gewählten Modus, der auf diese Entitäten angewendet wird."
+        }
+      },
+      "union": {
+        "title": "Union — benutzerdefinierte Zustände",
+        "description": "Lege fest, welche Entitäten ON und welche OFF sein müssen. Die Gruppe ist ON, wenn alle Bedingungen erfüllt sind.",
+        "data": {
+          "entities_on": "Entitäten, die ON sein müssen",
+          "entities_off": "Entitäten, die OFF sein müssen"
+        },
+        "data_description": {
+          "entities_on": "Die Gruppe ist nur ON, wenn ALLE dieser Entitäten ON sind.",
+          "entities_off": "Die Gruppe ist nur ON, wenn ALLE dieser Entitäten OFF sind."
+        }
+      },
+      "conditions": {
+        "title": "Bedingungen — benutzerdefinierte Logik",
+        "description": "Definiere den Gruppenstand mit vollständiger OR/AND/NOT-Logik, genau wie Automatisierungsbedingungen. Die Gruppe ist ON, wenn alle Bedingungen der obersten Ebene erfüllt sind. Verwende eine OR-Bedingung, die mehrere AND-Bedingungen umfasst, um alternative Kombinationen auszudrücken.",
+        "data": {
+          "conditions": "Bedingungen"
+        },
+        "data_description": {
+          "conditions": "Unterstützt OR, AND, NOT, state, template, numeric_state und alle anderen HA-Bedingungstypen. Entitäts-IDs in Zustandsbedingungen werden automatisch verfolgt."
+        }
+      }
+    },
+    "error": {
+      "no_entities": "Du musst mindestens eine input_boolean-Entität auswählen.",
+      "no_union_entities": "Du musst mindestens eine Entität für 'muss ON sein' oder 'muss OFF sein' auswählen.",
+      "no_conditions": "Du musst mindestens eine Bedingung hinzufügen."
+    },
+    "abort": {
+      "already_configured": "Diese Gruppe ist bereits konfiguriert."
+    }
+  },
+  "options": {
+    "step": {
+      "init": {
+        "title": "Input-Boolean-Gruppe bearbeiten",
+        "description": "Ändere den Zustandsauswertungsmodus.",
+        "data": {
+          "mode": "Zustandsmodus"
+        },
+        "data_description": {
+          "mode": "Wie die Zustände der Mitgliedsentitäten kombiniert werden, um den Gruppenstand zu bestimmen."
+        }
+      },
+      "entities": {
+        "title": "Entitäten bearbeiten",
+        "description": "Aktualisiere die Mitgliedsentitäten der Gruppe.",
+        "data": {
+          "entities": "Input-Boolean-Entitäten"
+        },
+        "data_description": {
+          "entities": "Der Gruppenstatus ist ON basierend auf dem gewählten Modus, der auf diese Entitäten angewendet wird."
+        }
+      },
+      "union": {
+        "title": "Union bearbeiten — benutzerdefinierte Zustände",
+        "description": "Aktualisiere, welche Entitäten ON und welche OFF sein müssen.",
+        "data": {
+          "entities_on": "Entitäten, die ON sein müssen",
+          "entities_off": "Entitäten, die OFF sein müssen"
+        },
+        "data_description": {
+          "entities_on": "Die Gruppe ist nur ON, wenn ALLE dieser Entitäten ON sind.",
+          "entities_off": "Die Gruppe ist nur ON, wenn ALLE dieser Entitäten OFF sind."
+        }
+      },
+      "conditions": {
+        "title": "Bedingungen bearbeiten — benutzerdefinierte Logik",
+        "description": "Aktualisiere die OR/AND/NOT-Bedingungen, die den Gruppenstand bestimmen.",
+        "data": {
+          "conditions": "Bedingungen"
+        },
+        "data_description": {
+          "conditions": "Verwende OR, AND, NOT, state, template, numeric_state und alle anderen HA-Bedingungstypen. Entitäts-IDs werden automatisch für die Zustandsänderungsverfolgung erkannt."
+        }
+      }
+    },
+    "error": {
+      "no_entities": "Du musst mindestens eine input_boolean-Entität auswählen.",
+      "no_union_entities": "Du musst mindestens eine Entität für 'muss ON sein' oder 'muss OFF sein' auswählen.",
+      "no_conditions": "Du musst mindestens eine Bedingung hinzufügen."
+    }
+  }
+}
