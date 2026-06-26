@@ -105,9 +105,7 @@ def _normalize_conditions(conditions: list[dict]) -> list[dict]:
             # HA 2026 string entity_ids are converted to list in _prepare_for_compile.
             if isinstance(entity_id, list) and len(entity_id) == 1:
                 cond["entity_id"] = entity_id[0]
-                cond.pop("match", None)
-            elif isinstance(entity_id, list):
-                cond.pop("match", None)
+                cond.pop("match", None)  # redundant for single entity
             state = cond.get("state")
             if isinstance(state, list) and len(state) == 1:
                 cond["state"] = state[0]
