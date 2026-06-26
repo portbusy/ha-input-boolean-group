@@ -436,13 +436,29 @@ class InputBooleanGroup(RestoreEntity):
         if self._mode == MODE_CONDITIONS:
             # Re-evaluate once HA has fully started: template-referenced entities
             # (e.g. sensors) may not have their state yet during early setup.
-            @callback
-            def _on_ha_started(_event: Event) -> None:
+            if self.hass.is_running:
+                # HA already started (e.g. entity_id regeneration mid-session):
+                # skip the one-time listener and re-evaluate immediately.
                 self.hass.async_create_task(self._async_update_and_write())
+            else:
+                @callback
+                def _on_ha_started(_event: Event) -> None:
+                    self.hass.async_create_task(self._async_update_and_write())
 
-            self.async_on_remove(
-                self.hass.bus.async_listen_once(EVENT_HOMEASSISTANT_STARTED, _on_ha_started)
-            )
+                cancel = self.hass.bus.async_listen_once(
+                    EVENT_HOMEASSISTANT_STARTED, _on_ha_started
+                )
+
+                @callback
+                def _safe_cancel() -> None:
+                    # Guard against ValueError if the one-time listener already
+                    # fired and auto-removed itself before the entity is torn down.
+                    try:
+                        cancel()
+                    except ValueError:
+                        pass
+
+                self.async_on_remove(_safe_cancel)
 
     @callback
     def _async_start_tracking(self) -> None:
