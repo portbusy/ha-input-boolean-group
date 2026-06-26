@@ -57,7 +57,7 @@ def _normalize_conditions(conditions: list[dict]) -> list[dict]:
     Handles several mismatches between the HA frontend condition editor and
     the backend condition schema:
 
-    - state: entity_id as single-item list → string; redundant match:all removed
+    - state: entity_id normalized to list (HA 2026 iterates strings char-by-char)
     - state: state as single-item list → string
     - or/and/not: spurious `mode` key removed
     - template: value_template as {template: "..."} dict → plain string
@@ -101,8 +101,13 @@ def _normalize_conditions(conditions: list[dict]) -> list[dict]:
 
         if cond_type == "state":
             entity_id = cond.get("entity_id")
-            if isinstance(entity_id, list) and len(entity_id) == 1:
-                cond["entity_id"] = entity_id[0]
+            # Normalize entity_id to a list. HA 2026 iterates string entity_ids
+            # character-by-character when evaluating state conditions, so we must
+            # always use the list form.
+            if isinstance(entity_id, str):
+                cond["entity_id"] = [entity_id]
+                cond.pop("match", None)
+            elif isinstance(entity_id, list) and len(entity_id) == 1:
                 cond.pop("match", None)
             state = cond.get("state")
             if isinstance(state, list) and len(state) == 1:
