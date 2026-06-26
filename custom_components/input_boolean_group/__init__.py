@@ -128,6 +128,58 @@ def _normalize_conditions(conditions: list[dict]) -> list[dict]:
     return result
 
 
+async def _compile_condition_resilient(
+    hass: HomeAssistant,
+    cond: dict,
+    name: str,
+) -> Any:
+    """Compile a condition with per-sub-condition resilience for and/or/not.
+
+    Unlike async_from_config, which fails the entire and/or/not block when one
+    sub-condition has an unknown type, this function compiles each sub-condition
+    individually and skips only the ones that fail. Unknown leaf types (e.g.
+    zone.occupancy_is_detected) are skipped with a warning rather than aborting
+    the parent.
+    """
+    ctype = cond.get("condition")
+
+    if ctype in ("and", "or", "not"):
+        sub_checks: list[Any] = []
+        for sub in cond.get("conditions", []):
+            check = await _compile_condition_resilient(hass, sub, name)
+            if check is not None:
+                sub_checks.append(check)
+        if not sub_checks:
+            _LOGGER.warning(
+                "ibg[%s] %s: no sub-conditions compiled — block skipped", name, ctype
+            )
+            return None
+        if ctype == "and":
+            _checks = sub_checks
+            def _and(h: Any, v: Any, _c: list = _checks) -> bool:
+                return all(c(h, v) for c in _c)
+            return _and
+        if ctype == "or":
+            _checks = sub_checks
+            def _or(h: Any, v: Any, _c: list = _checks) -> bool:
+                return any(c(h, v) for c in _c)
+            return _or
+        # not: True when none of the sub-conditions is True
+        _checks = sub_checks
+        def _not(h: Any, v: Any, _c: list = _checks) -> bool:
+            return not any(c(h, v) for c in _c)
+        return _not
+
+    try:
+        prepared = _prepare_for_compile(hass, cond)
+        return await cond_helper.async_from_config(hass, prepared)
+    except Exception as err:  # noqa: BLE001
+        _LOGGER.warning(
+            "ibg[%s] condition skipped (compile error): %s — %s", name, ctype, err
+        )
+        return None
+
+
 def _prepare_for_compile(hass: HomeAssistant, cond: dict) -> dict:
     """Prepare a condition dict for async_from_config.
 
@@ -371,20 +423,12 @@ class InputBooleanGroup(RestoreEntity):
             self._is_on = last_state.state == STATE_ON
 
         # Compile conditions once at setup time to avoid per-event overhead.
-        # _prepare_for_compile converts value_template strings → Template objects
-        # because async_from_config in HA 2026+ no longer does this implicitly.
+        # _compile_condition_resilient handles and/or/not recursively so that
+        # an unknown sub-condition type skips only itself, not the parent block.
         for cond in self._conditions:
-            try:
-                prepared = _prepare_for_compile(self.hass, cond)
-                self._condition_checks.append(
-                    await cond_helper.async_from_config(self.hass, prepared)
-                )
-            except Exception as err:  # noqa: BLE001
-                _LOGGER.error(
-                    "Failed to compile condition for %s: %s — condition skipped",
-                    self.name,
-                    err,
-                )
+            check = await _compile_condition_resilient(self.hass, cond, self.name)
+            if check is not None:
+                self._condition_checks.append(check)
 
         if self._mode == MODE_CONDITIONS:
             _LOGGER.warning(
@@ -492,6 +536,10 @@ class InputBooleanGroup(RestoreEntity):
         except Exception as err:  # noqa: BLE001
             _LOGGER.error("Error evaluating conditions for %s: %s", self.name, err)
             return False
+
+    async def async_update(self) -> None:
+        """Force re-evaluation when homeassistant.update_entity is called."""
+        await self._async_update_and_write()
 
     async def async_will_remove_from_hass(self) -> None:
         """Clean up state tracking and any pending update task on removal."""
