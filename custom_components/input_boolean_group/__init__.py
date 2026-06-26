@@ -57,7 +57,7 @@ def _normalize_conditions(conditions: list[dict]) -> list[dict]:
     Handles several mismatches between the HA frontend condition editor and
     the backend condition schema:
 
-    - state: entity_id normalized to list (HA 2026 iterates strings char-by-char)
+    - state: entity_id list-of-1 → string (frontend editor requires string form)
     - state: state as single-item list → string
     - or/and/not: spurious `mode` key removed
     - template: value_template as {template: "..."} dict → plain string
@@ -101,13 +101,12 @@ def _normalize_conditions(conditions: list[dict]) -> list[dict]:
 
         if cond_type == "state":
             entity_id = cond.get("entity_id")
-            # Normalize entity_id to a list. HA 2026 iterates string entity_ids
-            # character-by-character when evaluating state conditions, so we must
-            # always use the list form.
-            if isinstance(entity_id, str):
-                cond["entity_id"] = [entity_id]
+            # Store entity_id as a string for frontend editor compatibility.
+            # HA 2026 string entity_ids are converted to list in _prepare_for_compile.
+            if isinstance(entity_id, list) and len(entity_id) == 1:
+                cond["entity_id"] = entity_id[0]
                 cond.pop("match", None)
-            elif isinstance(entity_id, list) and len(entity_id) == 1:
+            elif isinstance(entity_id, list):
                 cond.pop("match", None)
             state = cond.get("state")
             if isinstance(state, list) and len(state) == 1:
@@ -128,11 +127,11 @@ def _normalize_conditions(conditions: list[dict]) -> list[dict]:
 
 
 def _prepare_for_compile(hass: HomeAssistant, cond: dict) -> dict:
-    """Convert value_template strings to Template objects before async_from_config.
+    """Prepare a condition dict for async_from_config.
 
-    In HA 2026+, async_from_config no longer coerces value_template strings to
-    Template objects internally. Calling the compiled checker on a raw string
-    raises AttributeError ('str' has no attribute 'async_render_to_info').
+    Two HA 2026+ fixes applied recursively:
+    - value_template strings → Template objects (async_from_config no longer coerces)
+    - state entity_id strings → single-item lists (HA 2026 iterates strings char-by-char)
     """
     cond = dict(cond)
     ctype = cond.get("condition")
@@ -140,6 +139,10 @@ def _prepare_for_compile(hass: HomeAssistant, cond: dict) -> dict:
         vt = cond.get("value_template")
         if isinstance(vt, str):
             cond["value_template"] = template_helper.Template(vt, hass)
+    elif ctype == "state":
+        entity_id = cond.get("entity_id")
+        if isinstance(entity_id, str):
+            cond["entity_id"] = [entity_id]
     for nested_key in ("conditions", "sequence"):
         nested = cond.get(nested_key)
         if isinstance(nested, list):
