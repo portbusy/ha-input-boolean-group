@@ -58,6 +58,7 @@ def _normalize_conditions(conditions: list[dict]) -> list[dict]:
     the backend condition schema:
 
     - state: entity_id list-of-1 → string (frontend editor requires string form)
+    - state: for:0 stripped (zero-duration for causes datetime math errors)
     - state: state as single-item list → string
     - or/and/not: spurious `mode` key removed
     - template: value_template as {template: "..."} dict → plain string
@@ -109,6 +110,9 @@ def _normalize_conditions(conditions: list[dict]) -> list[dict]:
             state = cond.get("state")
             if isinstance(state, list) and len(state) == 1:
                 cond["state"] = state[0]
+            for_val = cond.get("for")
+            if for_val in ("0", "00:00:00", "0:00:00"):
+                cond.pop("for")
         elif cond_type in ("or", "and", "not"):
             cond.pop("mode", None)
         elif cond_type == "template":
@@ -236,6 +240,18 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     conditions = _normalize_conditions(raw_conditions)
     if mode == MODE_CONDITIONS:
         _LOGGER.warning("ibg[%s] normalized: %s", entry.data["name"], conditions)
+
+    # If normalization changed the stored data, write it back so the frontend
+    # visual editor always reads the canonical (string) form.
+    if conditions != raw_conditions:
+        if CONF_CONDITIONS in entry.options:
+            hass.config_entries.async_update_entry(
+                entry, options={**entry.options, CONF_CONDITIONS: conditions}
+            )
+        elif CONF_CONDITIONS in entry.data:
+            hass.config_entries.async_update_entry(
+                entry, data={**entry.data, CONF_CONDITIONS: conditions}
+            )
 
     entity = InputBooleanGroup(
         unique_id=entry.entry_id,
