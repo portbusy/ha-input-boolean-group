@@ -1,0 +1,45 @@
+name: Translation
+description: Submit a new translation or fix an existing one.
+labels: ["translation"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Translations live in `custom_components/input_boolean_group/translations/`.
+        The source of truth is `strings.json` (English). Each translation file must
+        cover all keys present there.
+
+        If you are comfortable with GitHub, a pull request is preferred over an issue.
+
+  - type: input
+    id: language
+    attributes:
+      label: Language
+      placeholder: "e.g. French (fr)"
+    validations:
+      required: true
+
+  - type: dropdown
+    id: type
+    attributes:
+      label: Type
+      options:
+        - New language
+        - Correction to existing translation
+    validations:
+      required: true
+
+  - type: textarea
+    id: translation
+    attributes:
+      label: Translation (JSON)
+      description: Paste the complete translation file content, following the structure of `strings.json`.
+      render: json
+    validations:
+      required: true
+
+  - type: textarea
+    id: notes
+    attributes:
+      label: Notes
+      description: Any terminology choices or context that might be useful for review.

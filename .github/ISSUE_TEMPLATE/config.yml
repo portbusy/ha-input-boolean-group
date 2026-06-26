@@ -1,0 +1,8 @@
+blank_issues_enabled: false
+contact_links:
+  - name: Community Forum
+    url: https://community.home-assistant.io/t/input-boolean-groups/996318
+    about: Questions, setup help, and general discussion.
+  - name: HACS Documentation
+    url: https://hacs.xyz
+    about: Help with installing or updating via HACS.

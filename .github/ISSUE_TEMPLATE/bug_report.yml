@@ -1,0 +1,77 @@
+name: Bug report
+description: Something is not working as expected.
+labels: ["bug"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Before opening a bug report, please check the existing issues to avoid duplicates.
+
+  - type: input
+    id: version
+    attributes:
+      label: Integration version
+      placeholder: "e.g. 1.0.0"
+    validations:
+      required: true
+
+  - type: input
+    id: ha_version
+    attributes:
+      label: Home Assistant version
+      placeholder: "e.g. 2025.6.0"
+    validations:
+      required: true
+
+  - type: dropdown
+    id: mode
+    attributes:
+      label: Group mode
+      options:
+        - any
+        - all
+        - union
+        - conditions
+        - Not applicable
+    validations:
+      required: true
+
+  - type: textarea
+    id: description
+    attributes:
+      label: What happened?
+      description: Describe the problem clearly. Include what you expected to happen and what actually happened.
+    validations:
+      required: true
+
+  - type: textarea
+    id: steps
+    attributes:
+      label: Steps to reproduce
+      placeholder: |
+        1. Create a group with mode ...
+        2. Set entities to ...
+        3. ...
+    validations:
+      required: true
+
+  - type: textarea
+    id: config
+    attributes:
+      label: Group configuration (YAML)
+      description: Paste the YAML for the affected group (Settings → Devices & Services → the group entry → three dots → Download diagnostics, or copy from your config file).
+      render: yaml
+
+  - type: textarea
+    id: logs
+    attributes:
+      label: Relevant log entries
+      description: |
+        Enable debug logging for the integration and paste any relevant lines here.
+
+        ```yaml
+        logger:
+          logs:
+            custom_components.input_boolean_group: debug
+        ```
+      render: text
