@@ -18,6 +18,7 @@ from homeassistant.const import (
 from homeassistant.core import Event, HomeAssistant, callback
 from homeassistant.helpers import condition as cond_helper
 from homeassistant.helpers import config_validation as cv
+from homeassistant.helpers import device_registry as dr
 from homeassistant.helpers import template as template_helper
 from homeassistant.helpers import entity_registry as er
 from homeassistant.helpers.entity_component import EntityComponent
@@ -204,13 +205,28 @@ _TEMPLATE_ENTITY_RE = re.compile(
 )
 
 
-def _extract_entity_ids_from_conditions(conditions: list[dict]) -> list[str]:
+def _entity_ids_for_area(hass: HomeAssistant, area_id: str) -> list[str]:
+    """Resolve an area_id to entity_ids located in it, directly or via device."""
+    ent_reg = er.async_get(hass)
+    dev_reg = dr.async_get(hass)
+    entity_ids = {entry.entity_id for entry in er.async_entries_for_area(ent_reg, area_id)}
+    for device in dr.async_entries_for_area(dev_reg, area_id):
+        entity_ids.update(
+            entry.entity_id for entry in er.async_entries_for_device(ent_reg, device.id)
+        )
+    return list(entity_ids)
+
+
+def _extract_entity_ids_from_conditions(
+    hass: HomeAssistant, conditions: list[dict]
+) -> list[str]:
     """Recursively collect entity IDs referenced inside a condition list.
 
     Scans both 'entity_id' (singular) and 'entity_ids' (plural) for explicit
-    references, and also extracts entities from value_template strings via
-    regex so that template-based conditions trigger re-evaluation when any
-    referenced entity changes.
+    references, extracts entities from value_template strings via regex, and
+    resolves 'area_id' (as used by purpose-specific target-based conditions,
+    e.g. HA 2026.7+) to its member entity_ids so area-scoped conditions still
+    trigger re-evaluation when a relevant entity changes.
     """
     entity_ids: set[str] = set()
 
@@ -222,6 +238,15 @@ def _extract_entity_ids_from_conditions(conditions: list[dict]) -> list[str]:
                     entity_ids.add(raw)
                 elif isinstance(raw, list):
                     entity_ids.update(e for e in raw if isinstance(e, str))
+            area_raw = obj.get("area_id")
+            areas = (
+                [area_raw] if isinstance(area_raw, str)
+                else area_raw if isinstance(area_raw, list)
+                else []
+            )
+            for area_id in areas:
+                if isinstance(area_id, str):
+                    entity_ids.update(_entity_ids_for_area(hass, area_id))
             # Extract entities referenced inside template strings.
             for key in ("value_template", "template"):
                 tmpl = obj.get(key)
@@ -238,6 +263,7 @@ def _extract_entity_ids_from_conditions(conditions: list[dict]) -> list[str]:
 
 
 def _build_tracked_ids(
+    hass: HomeAssistant,
     mode: str,
     entity_ids: list[str],
     entities_on: list[str],
@@ -246,7 +272,7 @@ def _build_tracked_ids(
 ) -> list[str]:
     """Return the deduplicated entity IDs to track for this mode."""
     if mode == MODE_CONDITIONS:
-        return _extract_entity_ids_from_conditions(conditions)
+        return _extract_entity_ids_from_conditions(hass, conditions)
     sources = (entities_on + entities_off) if mode == MODE_UNION else entity_ids
     seen: set[str] = set()
     result: list[str] = []
@@ -374,10 +400,9 @@ class InputBooleanGroup(RestoreEntity):
         # Pre-compiled condition callables; populated in async_added_to_hass.
         self._condition_checks: list[Any] = []
 
-        # Cached once: all inputs are immutable after __init__.
-        self._tracked_ids: list[str] = _build_tracked_ids(
-            mode, entity_ids, entities_on, entities_off, conditions
-        )
+        # Resolved in async_added_to_hass, once self.hass is available
+        # (area_id resolution for conditions mode needs the registries).
+        self._tracked_ids: list[str] = []
 
         # Derived constant exposed as backward-compat attribute.
         self._attr_all_mode: bool = mode == MODE_ALL
@@ -413,6 +438,15 @@ class InputBooleanGroup(RestoreEntity):
         last_state = await self.async_get_last_state()
         if last_state is not None:
             self._is_on = last_state.state == STATE_ON
+
+        self._tracked_ids = _build_tracked_ids(
+            self.hass,
+            self._mode,
+            self._entity_ids,
+            self._entities_on,
+            self._entities_off,
+            self._conditions,
+        )
 
         # Compile conditions once at setup time to avoid per-event overhead.
         # _compile_condition_resilient handles and/or/not recursively so that
