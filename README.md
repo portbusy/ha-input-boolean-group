@@ -55,6 +55,10 @@ Uses Home Assistant's standard condition editor — the same one available in au
 
 The group state is read-only in this mode; `turn_on`, `turn_off` and `toggle` are no-ops. State is recomputed automatically whenever a referenced entity changes. If a condition cannot be compiled at startup, it is skipped and the remaining conditions still apply.
 
+Target-based conditions keep the editor's any/all behavior, targets and duration options. Disabled conditions are ignored, as in Home Assistant automations.
+
+If an earlier version already converted a target-based condition into a classic state condition, reselect it in the editor to restore the intended behavior and targets. Options discarded by that earlier conversion cannot be recovered automatically.
+
 ## Services
 
 | Service | any / all | union | conditions |
@@ -72,6 +76,18 @@ The group state is read-only in this mode; `turn_on`, `turn_off` and `toggle` ar
 | `entity_id` | Tracked entity IDs (any / all / conditions modes) |
 | `entities_on` | Entities required to be ON (union mode) |
 | `entities_off` | Entities required to be OFF (union mode) |
+
+## Development
+
+Compatibility tests run against Home Assistant **2026.9.3** (stable release checked on September 22, 2026), using Python 3.14:
+
+```sh
+python3.14 -m venv .venv
+.venv/bin/python -m pip install -r requirements-test.txt
+.venv/bin/python -m pytest -q
+```
+
+The tests use an isolated Home Assistant instance with network access blocked. The validation workflow runs them alongside HACS and Hassfest checks.
 
 ## License
 

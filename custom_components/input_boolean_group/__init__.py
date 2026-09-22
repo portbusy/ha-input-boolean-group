@@ -1,5 +1,6 @@
 """Core logic and entity setup for the Input Boolean Group helper."""
 import asyncio
+from collections.abc import Callable
 import logging
 import re
 from typing import Any
@@ -15,7 +16,7 @@ from homeassistant.const import (
     STATE_UNAVAILABLE,
     STATE_UNKNOWN,
 )
-from homeassistant.core import Event, HomeAssistant, callback
+from homeassistant.core import CALLBACK_TYPE, Event, HomeAssistant, callback
 from homeassistant.helpers import condition as cond_helper
 from homeassistant.helpers import config_validation as cv
 from homeassistant.helpers import device_registry as dr
@@ -63,10 +64,9 @@ def _normalize_conditions(conditions: list[dict]) -> list[dict]:
     - state: state as single-item list → string
     - or/and/not: spurious `mode` key removed
     - template: value_template as {template: "..."} dict → plain string
-    - action conditions (domain.is_on / domain.is_off with target/options):
-      converted to equivalent classic `state` conditions; the `for` key is
-      kept only when non-zero, and only when it's already a timedelta-compatible
-      value (HA passes it as a string '00:00:00' which breaks datetime math).
+
+    Target-based conditions are kept intact so Home Assistant can apply their
+    domain filters, target selection, behavior, duration and enabled options.
 
     Called both from config_flow (before saving) and from async_setup_entry
     (at load time, to fix entries saved before normalization was in place).
@@ -75,31 +75,6 @@ def _normalize_conditions(conditions: list[dict]) -> list[dict]:
     for raw in conditions:
         cond: dict[str, Any] = dict(raw)
         cond_type = cond.get("condition", "")
-
-        # Action-condition format: domain.is_on / domain.is_off
-        # Example: {'condition': 'switch.is_on', 'target': {'entity_id': '...'}, 'options': {...}}
-        if isinstance(cond_type, str) and "." in cond_type and "target" in cond:
-            target = cond.get("target") or {}
-            entity_id = target.get("entity_id")
-            options = cond.get("options") or {}
-            state_val = (
-                "on" if cond_type.endswith(".is_on")
-                else "off" if cond_type.endswith(".is_off")
-                else None
-            )
-            if state_val and entity_id:
-                new_cond: dict[str, Any] = {
-                    "condition": "state",
-                    "entity_id": entity_id,
-                    "state": state_val,
-                }
-                for_val = options.get("for")
-                # Keep 'for' only when it is a non-zero, timedelta-compatible value.
-                # The frontend often emits '00:00:00' which causes datetime - str errors.
-                if for_val and for_val not in ("0", "00:00:00", "0:00:00"):
-                    new_cond["for"] = for_val
-                cond = new_cond
-                cond_type = "state"
 
         if cond_type == "state":
             entity_id = cond.get("entity_id")
@@ -129,10 +104,39 @@ def _normalize_conditions(conditions: list[dict]) -> list[dict]:
     return result
 
 
+def _legacy_state_condition(cond: dict) -> dict:
+    """Adapt entity-only on/off conditions for the HA 2026.2 condition API.
+
+    That API gates native conditions behind Labs and its switch condition does
+    not include input_boolean entities. Convert only for compilation; never
+    discard targets or overwrite the condition stored by the frontend.
+    """
+    if not hasattr(cond_helper.Condition, "async_get_checker"):
+        return cond
+    target = cond.get("target") or {}
+    ctype = cond.get("condition", "")
+    if set(target) != {"entity_id"} or not ctype.endswith((".is_on", ".is_off")):
+        return cond
+    options = cond.get("options") or {}
+    converted = {
+        key: value for key, value in cond.items() if key not in ("target", "options")
+    }
+    converted.update(
+        condition="state",
+        entity_id=target["entity_id"],
+        state=STATE_ON if ctype.endswith(".is_on") else STATE_OFF,
+        match=options.get("behavior", "any"),
+    )
+    if "for" in options:
+        converted["for"] = cv.positive_time_period(options["for"])
+    return converted
+
+
 async def _compile_condition_resilient(
     hass: HomeAssistant,
     cond: dict,
     name: str,
+    on_unload: Callable[[CALLBACK_TYPE], None],
 ) -> Any:
     """Compile a single condition using HA's full validation + compilation pipeline.
 
@@ -140,13 +144,16 @@ async def _compile_condition_resilient(
     For and/or/not, each sub-condition is compiled individually so that an unknown
     or unsupported leaf (e.g. an experimental zone condition) is skipped with a
     WARNING without aborting the parent block.
+
+    Register every leaf's cleanup, including leaves nested in logical blocks.
+    Older HA versions return plain callables without an unload method.
     """
     ctype = cond.get("condition")
 
-    if ctype in ("and", "or", "not"):
+    if ctype in ("and", "or", "not") and cond.get("enabled", True) is not False:
         sub_checks: list[Any] = []
         for sub in cond.get("conditions", []):
-            check = await _compile_condition_resilient(hass, sub, name)
+            check = await _compile_condition_resilient(hass, sub, name, on_unload)
             if check is not None:
                 sub_checks.append(check)
         if not sub_checks:
@@ -157,26 +164,31 @@ async def _compile_condition_resilient(
         if ctype == "and":
             _checks = sub_checks
             def _and(h: Any, v: Any, _c: list = _checks) -> bool:
-                return all(c(h, v) for c in _c)
+                return all(c(h, v) is not False for c in _c)
             return _and
         if ctype == "or":
             _checks = sub_checks
             def _or(h: Any, v: Any, _c: list = _checks) -> bool:
-                return any(c(h, v) for c in _c)
+                return any(c(h, v) is True for c in _c)
             return _or
         # not: True when none of the sub-conditions is True
         _checks = sub_checks
         def _not(h: Any, v: Any, _c: list = _checks) -> bool:
-            return not any(c(h, v) for c in _c)
+            return not any(c(h, v) is True for c in _c)
         return _not
 
     try:
         # async_validate_condition_config mirrors what automations do before compiling:
         # normalises entity_id to list, validates schema, loads device/platform handlers.
         # This replaces our manual per-type normalisations for the compilation path.
-        validated = await cond_helper.async_validate_condition_config(hass, cond)
+        validated = await cond_helper.async_validate_condition_config(
+            hass, _legacy_state_condition(cond)
+        )
         prepared = _prepare_for_compile(hass, validated)
-        return await cond_helper.async_from_config(hass, prepared)
+        check = await cond_helper.async_from_config(hass, prepared)
+        if (unload := getattr(check, "async_unload", None)) is not None:
+            on_unload(unload)
+        return check
     except Exception as err:  # noqa: BLE001
         _LOGGER.warning(
             "ibg[%s] condition skipped (compile error): %s — %s", name, ctype, err
@@ -452,7 +464,9 @@ class InputBooleanGroup(RestoreEntity):
         # _compile_condition_resilient handles and/or/not recursively so that
         # an unknown sub-condition type skips only itself, not the parent block.
         for cond in self._conditions:
-            check = await _compile_condition_resilient(self.hass, cond, self.name)
+            check = await _compile_condition_resilient(
+                self.hass, cond, self.name, self.async_on_remove
+            )
             if check is not None:
                 self._condition_checks.append(check)
 
@@ -564,7 +578,8 @@ class InputBooleanGroup(RestoreEntity):
         """Evaluate pre-compiled HA conditions; returns True if all pass."""
         try:
             for check in self._condition_checks:
-                if not check(self.hass, {}):
+                # Modern HA checkers return None for disabled conditions.
+                if check(self.hass, {}) is False:
                     return False
             return True
         except Exception as err:  # noqa: BLE001
