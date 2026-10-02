@@ -1,5 +1,10 @@
 # Input Boolean Group
 
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcset="https://raw.githubusercontent.com/portbusy/ha-input-boolean-group/main/custom_components/input_boolean_group/brand/dark_logo%402x.png">
+  <img alt="Input Boolean Group" src="https://raw.githubusercontent.com/portbusy/ha-input-boolean-group/main/custom_components/input_boolean_group/brand/logo%402x.png" width="440">
+</picture>
+
 [![hacs_badge](https://img.shields.io/badge/HACS-Custom-41BDF5.svg)](https://github.com/hacs/integration)
 [![Home Assistant Community Forum](https://img.shields.io/badge/Community-Forum-blue?logo=home-assistant)](https://community.home-assistant.io/t/input-boolean-groups/996318)
 
@@ -21,6 +26,10 @@ Home Assistant's built-in Group helper supports lights, switches, covers and mor
 **Manual**
 
 Copy `custom_components/input_boolean_group/` into your HA `custom_components/` directory and restart.
+
+The integration includes light and dark brand images, displayed automatically
+by Home Assistant 2026.3 and newer. Older supported versions can still run the
+integration but do not load these local brand images.
 
 ## Setup
 

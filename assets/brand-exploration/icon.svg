@@ -1,0 +1,8 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="512" height="512" viewBox="0 0 512 512"><title>Input Boolean Group — Confluence</title><g fill="none" stroke="#147D73" stroke-width="28" stroke-linecap="round" stroke-linejoin="round">
+      <path d="M88 104H148C212 104 190 256 276 256H332"/>
+      <path d="M88 408H148C212 408 190 256 276 256"/>
+      <path d="M88 256H332"/>
+    </g>
+    <g fill="#147D73"><circle cx="72" cy="104" r="36"/><circle cx="72" cy="256" r="36"/><circle cx="72" cy="408" r="36"/></g>
+    <rect x="284" y="198" width="200" height="116" rx="58" fill="#123D3A"/>
+    <circle cx="424" cy="256" r="36" fill="#BDFB7A"/></svg>
