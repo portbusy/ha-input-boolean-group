@@ -26,6 +26,8 @@ async def hass(tmp_path):
     loader.async_setup(hass)
     frame.async_setup(hass)
     hass.config_entries = config_entries.ConfigEntries(hass, {})
+    # HA 2026.11+ entity registry load waits for config entries to initialize.
+    await hass.config_entries.async_initialize()
     device_registry.async_setup(hass)
     for registry in (
         floor_registry,

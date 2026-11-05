@@ -10,6 +10,7 @@ from homeassistant.config_entries import ConfigEntry
 from homeassistant.core import callback
 from homeassistant.helpers import area_registry as ar, condition as cond_helper
 from homeassistant.helpers import device_registry as dr, entity_registry as er
+from homeassistant.helpers.entity import Entity
 
 from custom_components.input_boolean_group import (
     InputBooleanGroup,
@@ -312,3 +313,33 @@ async def test_group_services_use_real_service_registry(hass):
         await hass.async_block_till_done()
         assert hass.states.get("input_boolean.a").state == expected
         assert hass.states.get(group.entity_id).state == expected
+
+
+def test_group_opts_in_to_in_place_entity_id_changes():
+    """HA 2026.11 only renames in place entities whose own class opts in."""
+    assert "async_entity_id_changed" in InputBooleanGroup.__dict__
+
+
+@pytest.mark.skipif(
+    not hasattr(Entity, "async_entity_id_changed"),
+    reason="Home Assistant < 2026.11 has no in-place entity_id changes",
+)
+async def test_entity_id_change_keeps_group_working(hass):
+    """Renaming the group keeps its member listeners and moves its state."""
+    hass.states.async_set("input_boolean.a", "off")
+    group = await add_group(hass, mode="any", entity_ids=["input_boolean.a"])
+    old_entity_id = group.entity_id
+    unsub = group._unsub_state_changed
+    group.async_entity_id_changed(old_entity_id)
+
+    new_entity_id = f"{DOMAIN}.renamed_group"
+    er.async_get(hass).async_update_entity(old_entity_id, new_entity_id=new_entity_id)
+    await hass.async_block_till_done()
+    assert group.entity_id == new_entity_id
+    assert hass.states.get(old_entity_id) is None
+    # Updated in place: the member listener was not torn down and recreated.
+    assert group._unsub_state_changed is unsub
+
+    hass.states.async_set("input_boolean.a", "on")
+    await hass.async_block_till_done()
+    assert hass.states.get(new_entity_id).state == "on"
