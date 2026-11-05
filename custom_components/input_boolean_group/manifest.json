@@ -1,6 +1,9 @@
 {
   "domain": "input_boolean_group",
   "name": "Input Boolean Group",
+  "categories": [
+    "helpers"
+  ],
   "codeowners": [
     "@portbusy"
   ],

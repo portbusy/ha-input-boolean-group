@@ -599,6 +599,11 @@ class InputBooleanGroup(RestoreEntity):
             self._update_task.cancel()
             self._update_task = None
 
+    @callback
+    def async_entity_id_changed(self, old_entity_id: str) -> None:
+        """Opt in to in-place entity_id changes."""
+        super().async_entity_id_changed(old_entity_id)
+
     async def async_turn_on(self, **kwargs: Any) -> None:
         """Turn on the group.
 
